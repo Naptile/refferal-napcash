@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NapCash – Profile</title>
+  <link rel="stylesheet" href="styles/profile.css">
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+</head>
+<body class="bg">
+
+<div class="nav">
+  <div class="brand">NapCash</div>
+  <div>
+    <span id="userEmail"></span>
+    <button id="logoutBtn">Logout</button>
+  </div>
+</div>
+
+<div class="hero">
+  <div class="card">
+    <h2>Profile</h2>
+    <p>Status: <span id="status"></span></p>
+    <p>Full Name: <input type="text" id="fullName"></p>
+    <p>Email: <span id="email"></span></p>
+    <p>Phone: <input type="text" id="phone"></p>
+    <button id="updateProfileBtn">Update Profile</button>
+  </div>
+</div>
+
+<script>
+const firebaseConfig = {
+  apiKey: "AIzaSyDybgITS1zttYLSa1_vsV0vYLzqbr42abA",
+  authDomain: "napcash-3e696.firebaseapp.com",
+  projectId: "napcash-3e696",
+};
+firebase.initializeApp(firebaseConfig);
+
+const auth = firebase.auth();
+const db = firebase.firestore();
+
+const userEmailSpan = document.getElementById("email");
+const userFullName = document.getElementById("fullName");
+const userPhone = document.getElementById("phone");
+const statusSpan = document.getElementById("status");
+const logoutBtn = document.getElementById("logoutBtn");
+const updateBtn = document.getElementById("updateProfileBtn");
+
+auth.onAuthStateChanged(async user => {
+  if(!user) return window.location.href = "login.html";
+  userEmailSpan.textContent = user.email;
+
+  const doc = await db.collection("users").doc(user.uid).get();
+  const data = doc.data();
+  userFullName.value = data.fullName || "";
+  userPhone.value = data.phone || "";
+  statusSpan.textContent = data.status || "pending";
+});
+
+updateBtn.onclick = async () => {
+  const user = auth.currentUser;
+  if(!user) return alert("User not found");
+  await db.collection("users").doc(user.uid).update({
+    fullName: userFullName.value,
+    phone: userPhone.value,
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+  });
+  alert("Profile updated!");
+};
+
+logoutBtn.onclick = async () => {
+  await auth.signOut();
+  window.location.href = "login.html";
+};
+</script>
+
+</body>
+</html>

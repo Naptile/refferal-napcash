@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NapCash – Admin Dashboard</title>
+  <link rel="stylesheet" href="styles/admin.css">
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+</head>
+<body class="bg">
+
+<div class="nav">
+  <div class="brand">NapCash Admin</div>
+  <div>
+    <button id="logoutBtn">Logout</button>
+  </div>
+</div>
+
+<div class="hero">
+  <div class="card">
+    <h2>Admin Dashboard</h2>
+
+    <!-- Add Member Form -->
+    <div class="add-member-form">
+      <h3>Add New Member</h3>
+      <input type="text" id="newFullName" placeholder="Full Name" required>
+      <input type="email" id="newEmail" placeholder="Email" required>
+      <input type="text" id="newPhone" placeholder="Phone Number" required>
+      <input type="text" id="newReferralCode" placeholder="Referral Code (optional)">
+      <input type="text" id="newReferredBy" placeholder="Referred By (optional)">
+      <button id="addMemberBtn">Add Member</button>
+    </div>
+
+    <!-- Search and Export -->
+    <div class="search-bar">
+      <input type="text" id="searchInput" placeholder="Search by name, email, phone, or referral code...">
+      <select id="statusFilter">
+        <option value="">All Status</option>
+        <option value="pending">Pending</option>
+        <option value="active">Active</option>
+        <option value="deactivated">Deactivated</option>
+      </select>
+      <button id="searchBtn">Search</button>
+      <button id="resetBtn">Reset</button>
+      <button id="exportBtn">Export All Users</button>
+      <button id="exportReferralsBtn">Export Referrals Only</button>
+    </div>
+
+    <!-- Users Table -->
+    <h3>All Users</h3>
+    <table class="users-table">
+      <thead>
+        <tr>
+          <th>Full Name</th>
+          <th>Email</th>
+          <th>Phone</th>
+          <th>Status</th>
+          <th>Referral Code</th>
+          <th>Earnings (KSh)</th>
+          <th>Referred By</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody id="usersTableBody">
+        <tr><td colspan="8">Loading users...</td></tr>
+      </tbody>
+    </table>
+
+    <!-- Withdrawals Table -->
+    <h3 style="margin-top:40px;">Withdrawal Requests</h3>
+    <table class="users-table">
+      <thead>
+        <tr>
+          <th>User</th>
+          <th>Email</th>
+          <th>Amount (KSh)</th>
+          <th>Status</th>
+          <th>Date</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody id="withdrawalsTableBody">
+        <tr><td colspan="6">Loading withdrawals...</td></tr>
+      </tbody>
+    </table>
+
+  </div>
+</div>
+
+<script>
+const firebaseConfig = {
+  apiKey: "AIzaSyDybgITS1zttYLSa1_vsV0vYLzqbr42abA",
+  authDomain: "napcash-3e696.firebaseapp.com",
+  projectId: "napcash-3e696",
+  storageBucket: "napcash-3e696.firebasestorage.app",
+  messagingSenderId: "720221815295",
+  appId: "1:720221815295:web:e8b299b30909c6cc9927ca"
+};
+
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
+
+const usersTableBody = document.getElementById("usersTableBody");
+const withdrawalsTableBody = document.getElementById("withdrawalsTableBody");
+const logoutBtn = document.getElementById("logoutBtn");
+
+let allUsers = [];
+
+auth.onAuthStateChanged(async user => {
+  if (!user) return window.location.href = "login.html";
+  loadUsers();
+  loadWithdrawals();
+});
+
+// Add Member
+document.getElementById("addMemberBtn").addEventListener("click", async () => {
+  const fullName = document.getElementById("newFullName").value.trim();
+  const email = document.getElementById("newEmail").value.trim();
+  const phone = document.getElementById("newPhone").value.trim();
+  const referralCode = document.getElementById("newReferralCode").value.trim() || null;
+  const referredBy = document.getElementById("newReferredBy").value.trim() || null;
+
+  if (!fullName || !email || !phone) {
+    alert("Please fill in Full Name, Email, and Phone Number.");
+    return;
+  }
+
+  await db.collection("users").add({
+    fullName,
+    email,
+    phone,
+    referralCode,
+    referredBy,
+    status: "pending",
+    earnings: 0,
+    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+  });
+
+  alert("New member added successfully!");
+  document.getElementById("newFullName").value = "";
+  document.getElementById("newEmail").value = "";
+  document.getElementById("newPhone").value = "";
+  document.getElementById("newReferralCode").value = "";
+  document.getElementById("newReferredBy").value = "";
+
+  loadUsers();
+});
+
+// Load Users
+async function loadUsers() {
+  const snapshot = await db.collection("users").orderBy("createdAt", "desc").get();
+  allUsers = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+  renderUsers(allUsers);
+}
+
+function renderUsers(users) {
+  if (users.length === 0) {
+    usersTableBody.innerHTML = "<tr><td colspan='8'>No users found</td></tr>";
+    return;
+  }
+
+  usersTableBody.innerHTML = "";
+  users.forEach(u => {
+    const tr = document.createElement("tr");
+
+    // Row color classes
+    if (u.status === "pending") tr.classList.add("pending");
+    if (u.status === "deactivated") tr.classList.add("deactivated");
+
+    // Action buttons
+    let actionButtons = "";
+    if (u.status === "pending") {
+      actionButtons += `<button onclick="activateUser('${u.id}')">Activate</button>`;
+      actionButtons += `<button onclick="deactivateUser('${u.id}')">Deactivate</button>`;
+    } else if (u.status === "active") {
+      actionButtons += `<button onclick="deactivateUser('${u.id}')">Deactivate</button>`;
+    } else if (u.status === "deactivated") {
+      actionButtons += `<button onclick="activateUser('${u.id}')">Activate</button>`;
+    }
+
+    tr.innerHTML = `
+      <td>${u.fullName || "N/A"}</td>
+      <td>${u.email || "N/A"}</td>
+      <td>${u.phone || "N/A"}</td>
+      <td>${u.status || "pending"}</td>
+      <td>${u.referralCode || "N/A"}</td>
+      <td>${u.earnings || 0}</td>
+      <td>${u.referredBy || "None"}</td>
+      <td>${actionButtons}</td>
+    `;
+    usersTableBody.appendChild(tr);
+  });
+}
+
+// Activate/Deactivate functions
+async function activateUser(userId) {
+  await db.collection("users").doc(userId).update({ status: "active" });
+  alert("User activated!");
+  loadUsers();
+}
+
+async function deactivateUser(userId) {
+  await db.collection("users").doc(userId).update({ status: "deactivated" });
+  alert("User deactivated!");
+  loadUsers();
+}
+
+// Load Withdrawals
+async function loadWithdrawals() {
+  const snapshot = await db.collection("withdrawals").orderBy("createdAt", "desc").get();
+  if (snapshot.empty) {
+    withdrawalsTableBody.innerHTML = "<tr><td colspan='6'>No withdrawals yet</td></tr>";
+    return;
+  }
+
+  withdrawalsTableBody.innerHTML = "";
+  for (const doc of snapshot.docs) {
+    const w = doc.data();
+    const user = await db.collection("users").doc(w.userId).get();
+    const userData = user.exists ? user.data() : {};
+
+    const tr = document.createElement("tr");
+    const date = w.createdAt ? w.createdAt.toDate().toLocaleString() : "Unknown";
+
+    tr.innerHTML = `
+      <td>${userData.fullName || "Unknown"}</td>
+      <td>${userData.email || "Unknown"}</td>
+      <td>${w.amount}</td>
+      <td>${w.status}</td>
+      <td>${date}</td>
+      <td>
+        ${w.status === "pending" ? `<button onclick="markPaid('${doc.id}')">Mark Paid</button>` : "—"}
+      </td>
+    `;
+    withdrawalsTableBody.appendChild(tr);
+  }
+}
+
+// Mark Withdrawal as Paid
+async function markPaid(withdrawalId) {
+  await db.collection("withdrawals").doc(withdrawalId).update({ status: "paid" });
+  alert("Withdrawal marked as Paid.");
+  loadWithdrawals();
+}
+
+// Export Users
+document.getElementById("exportBtn").addEventListener("click", () => {
+  if (allUsers.length === 0) {
+    alert("No users to export!");
+    return;
+  }
+
+  const headers = ["Full Name", "Email", "Phone", "Status", "Referral Code", "Earnings", "Referred By"];
+  const rows = allUsers.map(u => [
+    `"${u.fullName || "N/A"}"`,
+    `"${u.email || "N/A"}"`,
+    `"${u.phone || "N/A"}"`,
+    `"${u.status || "pending"}"`,
+    `"${u.referralCode || "N/A"}"`,
+    `"${u.earnings || 0}"`,
+    `"${u.referredBy || "None"}"`
+  ]);
+
+  const csvContent = [headers.join(","), ...rows.map(r => r.join(","))].join("\n");
+  downloadCSV(csvContent, "napcash_users.csv");
+});
+
+// Export Referrals Only
+document.getElementById("exportReferralsBtn").addEventListener("click", () => {
+  const rows = allUsers
+    .filter(u => u.referredBy && u.referredBy !== "None")
+    .map(u => [`"${u.fullName || u.email}"`, `"${u.referredBy}"`]);
+
+  if (rows.length === 0) {
+    alert("No referral data found!");
+    return;
+  }
+
+  const headers = ["User", "Referred By"];
+  const csvContent = [headers.join(","), ...rows.map(r => r.join(","))].join("\n");
+  downloadCSV(csvContent, "napcash_referrals.csv");
+});
+
+// Utility
+function downloadCSV(csvContent, filename) {
+  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+}
+
+logoutBtn.onclick = async () => {
+  await auth.signOut();
+  window.location.href = "login.html";
+};
+</script>
+
+</body>
+</html>

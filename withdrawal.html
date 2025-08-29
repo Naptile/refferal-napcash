@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NapCash – Withdrawal</title>
+  <link rel="stylesheet" href="styles/profile.css">
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+</head>
+<body class="bg">
+
+<div class="nav">
+  <div class="brand">NapCash Withdrawal</div>
+  <div>
+    <span id="userEmail"></span>
+    <button id="logoutBtn">Logout</button>
+  </div>
+</div>
+
+<div class="hero">
+  <div class="card">
+    <h2>Withdrawal</h2>
+
+    <p>Your Current Earnings: KSh <span id="currentEarnings">0</span></p>
+    <input type="number" id="withdrawAmount" placeholder="Enter amount to withdraw">
+    <button id="withdrawBtn">Withdraw</button>
+
+    <h3 style="margin-top:30px;">Withdrawal History</h3>
+    <ul id="withdrawalList" class="referral-list">
+      <li>Loading...</li>
+    </ul>
+  </div>
+</div>
+
+<script>
+const firebaseConfig = {
+  apiKey: "AIzaSyDybgITS1zttYLSa1_vsV0vYLzqbr42abA",
+  authDomain: "napcash-3e696.firebaseapp.com",
+  projectId: "napcash-3e696",
+  storageBucket: "napcash-3e696.firebasestorage.app",
+  messagingSenderId: "720221815295",
+  appId: "1:720221815295:web:e8b299b30909c6cc9927ca"
+};
+
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
+
+const userEmailSpan = document.getElementById("userEmail");
+const currentEarningsSpan = document.getElementById("currentEarnings");
+const withdrawAmountInput = document.getElementById("withdrawAmount");
+const withdrawBtn = document.getElementById("withdrawBtn");
+const withdrawalList = document.getElementById("withdrawalList");
+const logoutBtn = document.getElementById("logoutBtn");
+
+let userId = null;
+let currentEarnings = 0;
+
+auth.onAuthStateChanged(async user => {
+  if(!user) return window.location.href = "login.html";
+  
+  userId = user.uid;
+  userEmailSpan.textContent = user.email;
+
+  await loadUserEarnings();
+  loadWithdrawals();
+});
+
+async function loadUserEarnings() {
+  const doc = await db.collection("users").doc(userId).get();
+  const data = doc.data();
+  currentEarnings = data.earnings || 0;
+  currentEarningsSpan.textContent = currentEarnings;
+}
+
+withdrawBtn.addEventListener("click", async () => {
+  const amount = parseFloat(withdrawAmountInput.value);
+  if(!amount || amount <= 0) return alert("Enter a valid amount to withdraw.");
+  if(amount > currentEarnings) return alert("Cannot withdraw more than your balance.");
+  
+  const userDoc = await db.collection("users").doc(userId).get();
+  const userData = userDoc.data();
+  if(userData.status !== "active") return alert("You must activate your account first before withdrawing.");
+
+  // Update earnings
+  const newEarnings = currentEarnings - amount;
+  await db.collection("users").doc(userId).update({ earnings: newEarnings });
+  currentEarnings = newEarnings;
+  currentEarningsSpan.textContent = currentEarnings;
+
+  // Create withdrawal record
+  await db.collection("withdrawals").add({
+    userId,
+    amount,
+    status: "pending",
+    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+  });
+
+  alert(`Withdrawal of KSh ${amount} requested successfully!`);
+  withdrawAmountInput.value = "";
+  loadWithdrawals();
+});
+
+async function loadWithdrawals() {
+  const snapshot = await db.collection("withdrawals")
+                           .where("userId","==",userId)
+                           .orderBy("createdAt","desc")
+                           .get();
+  withdrawalList.innerHTML = "";
+  if(snapshot.empty){
+    withdrawalList.innerHTML = "<li>No withdrawals yet</li>";
+  } else {
+    snapshot.docs.forEach(doc => {
+      const w = doc.data();
+      const date = w.createdAt ? w.createdAt.toDate().toLocaleString() : "Unknown date";
+      const li = document.createElement("li");
+      li.textContent = `KSh ${w.amount} - Status: ${w.status} - ${date}`;
+      withdrawalList.appendChild(li);
+    });
+  }
+}
+
+logoutBtn.onclick = async () => {
+  await auth.signOut();
+  window.location.href = "login.html";
+};
+</script>
+
+</body>
+</html>

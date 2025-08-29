@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NapCash – Referral Info</title>
+  <link rel="stylesheet" href="styles/profile.css">
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+</head>
+<body class="bg">
+
+<div class="nav">
+  <div class="brand">NapCash Referral Info</div>
+  <div>
+    <span id="userEmail"></span>
+    <button id="logoutBtn">Logout</button>
+  </div>
+</div>
+
+<div class="hero">
+  <div class="card">
+    <h2>Your Referral Info</h2>
+
+    <div class="info-card">
+      <h3>Your Referral Code</h3>
+      <p id="refCode">Loading...</p>
+    </div>
+
+    <div class="info-card">
+      <h3>Your Referral Link</h3>
+      <p id="refLink">Loading...</p>
+      <button id="copyBtn">Copy Link</button>
+    </div>
+
+    <h3 style="margin-top:30px;">People You Referred</h3>
+    <ul id="referralsList" class="referral-list">
+      <li>Loading...</li>
+    </ul>
+  </div>
+</div>
+
+<script>
+const firebaseConfig = {
+  apiKey: "AIzaSyDybgITS1zttYLSa1_vsV0vYLzqbr42abA",
+  authDomain: "napcash-3e696.firebaseapp.com",
+  projectId: "napcash-3e696",
+  storageBucket: "napcash-3e696.firebasestorage.app",
+  messagingSenderId: "720221815295",
+  appId: "1:720221815295:web:e8b299b30909c6cc9927ca"
+};
+
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
+
+const userEmailSpan = document.getElementById("userEmail");
+const refCodeSpan = document.getElementById("refCode");
+const refLinkSpan = document.getElementById("refLink");
+const referralsList = document.getElementById("referralsList");
+const copyBtn = document.getElementById("copyBtn");
+
+let userId = null;
+
+auth.onAuthStateChanged(async user => {
+  if(!user) return window.location.href = "login.html";
+
+  userId = user.uid;
+  userEmailSpan.textContent = user.email;
+
+  const userDoc = await db.collection("users").doc(userId).get();
+  if(!userDoc.exists) return alert("User data not found.");
+  const data = userDoc.data();
+
+  refCodeSpan.textContent = data.referralCode || "N/A";
+  const referralLink = `${window.location.origin}/register.html?ref=${data.referralCode}`;
+  refLinkSpan.textContent = referralLink;
+
+  copyBtn.onclick = () => navigator.clipboard.writeText(referralLink)
+    .then(()=> alert("Referral link copied!"))
+    .catch(()=> alert("Failed to copy link"));
+
+  loadReferrals(data.referralCode);
+});
+
+async function loadReferrals(refCode) {
+  const refSnap = await db.collection("users").where("referredBy", "==", refCode).get();
+  referralsList.innerHTML = "";
+  if(refSnap.empty){
+    referralsList.innerHTML = "<li>No referrals yet</li>";
+    return;
+  }
+
+  refSnap.docs.forEach(doc => {
+    const d = doc.data();
+    const li = document.createElement("li");
+    li.textContent = `${d.fullName || d.email} - Status: ${d.status} - Earnings Contribution: KSh ${d.status === "active" ? 50 : 0}`;
+    referralsList.appendChild(li);
+  });
+}
+
+document.getElementById("logoutBtn").onclick = async () => {
+  await auth.signOut();
+  window.location.href = "login.html";
+};
+</script>
+
+</body>
+</html>
