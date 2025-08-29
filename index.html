@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NapCash – Register</title>
+  <link rel="stylesheet" href="styles/register.css">
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+</head>
+<body class="bg">
+
+  <div class="nav">
+    <div class="brand">NapCash</div>
+    <div>
+      <a href="index.html">Home</a>
+      <a href="login.html">Login</a>
+    </div>
+  </div>
+
+  <div class="hero">
+    <div class="card">
+      <h2 style="color:var(--black);">Register & Join NapCash</h2>
+      <form id="registerForm" class="form">
+        <input type="text" id="fullname" placeholder="Full Name" required>
+        <input type="tel" id="phone" placeholder="Phone Number (07...)" required>
+        <input type="email" id="email" placeholder="Email Address" required>
+        <input type="password" id="password" placeholder="Password" required>
+        <!-- Optional referral input -->
+        <input type="text" id="referralInput" placeholder="Referral Code (Optional)">
+        <button type="submit">Register</button>
+      </form>
+      <p style="margin-top:10px;">Already have an account? <a href="login.html" class="link">Login</a></p>
+      <p id="msg"></p>
+    </div>
+  </div>
+
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyDybgITS1zttYLSa1_vsV0vYLzqbr42abA",
+      authDomain: "napcash-3e696.firebaseapp.com",
+      projectId: "napcash-3e696",
+      storageBucket: "napcash-3e696.firebasestorage.app",
+      messagingSenderId: "720221815295",
+      appId: "1:720221815295:web:e8b299b30909c6cc9927ca"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+    const db = firebase.firestore();
+
+    // Capture referral from URL if exists
+    const params = new URLSearchParams(window.location.search);
+    const urlRef = params.get("ref");
+
+    function generateReferralCode() {
+      const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+      let code = '';
+      for(let i=0;i<6;i++) code += chars[Math.floor(Math.random()*chars.length)];
+      return code;
+    }
+
+    async function uniqueReferralCode() {
+      while(true){
+        const code = generateReferralCode();
+        const snap = await db.collection('users').where('referralCode','==',code).get();
+        if(snap.empty) return code;
+      }
+    }
+
+    document.getElementById("registerForm").addEventListener("submit", async (e)=>{
+      e.preventDefault();
+      const msg = document.getElementById("msg");
+      msg.style.color = "black";
+      msg.textContent = "Creating account...";
+
+      const fullName = document.getElementById("fullname").value.trim();
+      const phone = document.getElementById("phone").value.trim();
+      const email = document.getElementById("email").value.trim();
+      const password = document.getElementById("password").value;
+      const referralCodeInput = document.getElementById("referralInput").value.trim();
+      // Use referral from input first, otherwise from URL, otherwise null
+      const referredBy = referralCodeInput || urlRef || null;
+
+      try {
+        const userCred = await auth.createUserWithEmailAndPassword(email, password);
+        const uid = userCred.user.uid;
+        const referralCode = await uniqueReferralCode();
+
+        await db.collection("users").doc(uid).set({
+          fullName,
+          phone,
+          email,
+          referralCode,
+          referredBy,
+          status: "pending",
+          earnings: 0,
+          totalReferrals: 0,
+          createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+
+        // Update referrer earnings
+        if(referredBy){
+          const refSnap = await db.collection("users")
+                                  .where("referralCode","==",referredBy)
+                                  .limit(1).get();
+          if(!refSnap.empty){
+            const refDoc = refSnap.docs[0];
+            if(refDoc.id !== uid){
+              await refDoc.ref.update({
+                earnings: (refDoc.data().earnings || 0) + 50,
+                totalReferrals: (refDoc.data().totalReferrals || 0) + 1,
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+              });
+            }
+          }
+        }
+
+        msg.style.color = "green";
+        msg.textContent = "✅ Account created! Redirecting to dashboard...";
+        setTimeout(()=>window.location.href="dashboard.html", 1500);
+
+      } catch(err) {
+        msg.style.color = "red";
+        msg.textContent = "⚠️ Error: " + err.message;
+      }
+    });
+  </script>
+
+</body>
+</html>
