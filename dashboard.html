@@ -9,10 +9,10 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
   <style>
+    /* Mobile adjustments */
     @media (max-width: 768px) {
       .dashboard-grid { grid-template-columns: 1fr; gap: 15px; }
-      .nav { flex-direction: column; align-items: flex-start; padding: 15px; }
-      .nav div { margin-top: 10px; }
+      .nav { flex-direction: column; align-items: flex-start; padding: 15px; position: relative; }
       .info-card { padding: 15px; font-size: 0.95rem; }
       .referral-list li { font-size: 0.9rem; padding: 10px; }
       .hero { padding: 20px 10px; }
@@ -20,6 +20,7 @@
       #refLink { font-size: 0.9rem; }
       button { padding: 12px; font-size: 0.95rem; }
     }
+
     .btn-orange {
       background-color: orange;
       border: none;
@@ -42,15 +43,34 @@
       color: black;
       margin-bottom: 8px;
     }
+
+    /* Hamburger menu */
+    .hamburger { display:none; cursor:pointer; flex-direction:column; gap:4px; margin-left:10px; }
+    .hamburger div { width:25px; height:3px; background:black; transition:0.3s; }
+
+    .menu-items { display:flex; gap:10px; align-items:center; }
+    @media (max-width:768px) { 
+      .menu-items { display:none; flex-direction:column; background:#fff; position:absolute; top:60px; left:0; width:100%; padding:10px 0; box-shadow:0 2px 8px rgba(0,0,0,0.2); z-index:99; }
+      .menu-items button, .menu-items span { width:100%; text-align:left; padding:10px 20px; margin:0; }
+      .hamburger { display:flex; }
+    }
   </style>
 </head>
 <body class="bg">
 
 <div class="nav">
   <div class="brand">NapCash</div>
-  <div>
+  <div class="menu-items">
+    <button id="profileBtn" class="btn-orange">Profile</button>
+    <button id="withdrawInfoBtn" class="btn-orange">Withdrawal</button>
+    <button id="referralBtn" class="btn-orange">Referrals</button>
     <span id="userEmail"></span>
     <button id="logoutBtn" class="btn-orange">Logout</button>
+  </div>
+  <div class="hamburger" id="hamburger">
+    <div></div>
+    <div></div>
+    <div></div>
   </div>
 </div>
 
@@ -59,40 +79,34 @@
     <h2>Dashboard</h2>
 
     <div class="dashboard-grid">
-      <!-- Status Card -->
       <div class="info-card">
         <h3>Status</h3>
         <p id="status">Loading...</p>
         <button id="activateBtn" class="btn-orange" style="margin-top:10px;">Activate</button>
       </div>
 
-      <!-- Referral Code Card -->
       <div class="info-card">
         <h3>Your Referral Code</h3>
         <p id="refCode">Loading...</p>
       </div>
 
-      <!-- Earnings Card -->
       <div class="info-card">
         <h3>Your Earnings</h3>
         <p>KSh <span id="earnings">0</span></p>
       </div>
 
-      <!-- Referral Link Card -->
       <div class="info-card">
         <h3>Referral Link</h3>
         <input type="text" id="refLink" readonly>
         <button id="copyBtn" class="btn-orange">Copy Link</button>
       </div>
 
-      <!-- Withdraw Card -->
       <div class="info-card">
         <h3>Withdraw</h3>
         <button id="withdrawBtn" class="btn-orange">Activate account to withdraw</button>
       </div>
     </div>
 
-    <!-- Referred Users Section -->
     <div style="margin-top:30px;">
       <h3>People You Referred</h3>
       <ul id="referralsList" class="referral-list">
@@ -159,7 +173,7 @@
         .catch(()=>alert("Failed to copy link"));
     };
 
-    // Referred accounts with colored badges
+    // Referred accounts with status badges
     const refSnap = await db.collection("users")
                             .where("referredBy","==",data.referralCode)
                             .get();
@@ -196,7 +210,7 @@
       referralsList.innerHTML = "<li>No referrals yet</li>";
     }
 
-    // Earnings from active referrals
+    // Earnings only from active referrals
     const activeRefSnap = await db.collection("users")
                                   .where("referredBy","==",data.referralCode)
                                   .where("status","==","active")
@@ -227,6 +241,21 @@
     await auth.signOut();
     window.location.href = `${repoPath}/login.html`;
   };
+
+  // Hamburger menu functionality
+  const hamburger = document.getElementById("hamburger");
+  const menuItems = document.querySelector(".menu-items");
+
+  hamburger.addEventListener("click", () => {
+    if(menuItems.style.display === "flex") menuItems.style.display = "none";
+    else menuItems.style.display = "flex";
+  });
+
+  document.querySelectorAll(".menu-items button").forEach(btn => {
+    btn.addEventListener("click", () => {
+      if(window.innerWidth <= 768) menuItems.style.display = "none";
+    });
+  });
 </script>
 
 </body>
