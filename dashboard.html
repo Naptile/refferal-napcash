@@ -9,49 +9,38 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
   <style>
-    /* Mobile-Friendly Dashboard */
     @media (max-width: 768px) {
-        .dashboard-grid {
-            grid-template-columns: 1fr; /* stack cards vertically */
-            gap: 15px;
-        }
-
-        .nav {
-            flex-direction: column;
-            align-items: flex-start;
-            padding: 15px;
-        }
-
-        .nav div {
-            margin-top: 10px;
-        }
-
-        .info-card {
-            padding: 15px;
-            font-size: 0.95rem;
-        }
-
-        .referral-list li {
-            font-size: 0.9rem;
-            padding: 10px;
-        }
-
-        .hero {
-            padding: 20px 10px;
-        }
-
-        .card {
-            padding: 20px;
-        }
-
-        #refLink {
-            font-size: 0.9rem;
-        }
-
-        button {
-            padding: 12px;
-            font-size: 0.95rem;
-        }
+      .dashboard-grid { grid-template-columns: 1fr; gap: 15px; }
+      .nav { flex-direction: column; align-items: flex-start; padding: 15px; }
+      .nav div { margin-top: 10px; }
+      .info-card { padding: 15px; font-size: 0.95rem; }
+      .referral-list li { font-size: 0.9rem; padding: 10px; }
+      .hero { padding: 20px 10px; }
+      .card { padding: 20px; }
+      #refLink { font-size: 0.9rem; }
+      button { padding: 12px; font-size: 0.95rem; }
+    }
+    .btn-orange {
+      background-color: orange;
+      border: none;
+      color: black;
+      font-weight: bold;
+      padding: 10px 15px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: 0.3s;
+    }
+    .btn-orange:hover {
+      background-color: #ff9900;
+      color: white;
+    }
+    input#refLink {
+      width: 100%;
+      padding: 5px;
+      border-radius: 5px;
+      border: none;
+      color: black;
+      margin-bottom: 8px;
     }
   </style>
 </head>
@@ -61,7 +50,7 @@
   <div class="brand">NapCash</div>
   <div>
     <span id="userEmail"></span>
-    <button id="logoutBtn">Logout</button>
+    <button id="logoutBtn" class="btn-orange">Logout</button>
   </div>
 </div>
 
@@ -70,33 +59,40 @@
     <h2>Dashboard</h2>
 
     <div class="dashboard-grid">
+      <!-- Status Card -->
       <div class="info-card">
         <h3>Status</h3>
         <p id="status">Loading...</p>
+        <button id="activateBtn" class="btn-orange" style="margin-top:10px;">Activate</button>
       </div>
 
+      <!-- Referral Code Card -->
       <div class="info-card">
         <h3>Your Referral Code</h3>
         <p id="refCode">Loading...</p>
       </div>
 
+      <!-- Earnings Card -->
       <div class="info-card">
         <h3>Your Earnings</h3>
         <p>KSh <span id="earnings">0</span></p>
       </div>
 
+      <!-- Referral Link Card -->
       <div class="info-card">
         <h3>Referral Link</h3>
-        <input type="text" id="refLink" readonly style="width:100%; padding:5px; border-radius:5px; border:none; color:#000;">
-        <button id="copyBtn">Copy Link</button>
+        <input type="text" id="refLink" readonly>
+        <button id="copyBtn" class="btn-orange">Copy Link</button>
       </div>
 
+      <!-- Withdraw Card -->
       <div class="info-card">
         <h3>Withdraw</h3>
-        <button id="withdrawBtn">Withdraw</button>
+        <button id="withdrawBtn" class="btn-orange">Activate account to withdraw</button>
       </div>
     </div>
 
+    <!-- Referred Users Section -->
     <div style="margin-top:30px;">
       <h3>People You Referred</h3>
       <ul id="referralsList" class="referral-list">
@@ -119,7 +115,6 @@
   firebase.initializeApp(firebaseConfig);
   const auth = firebase.auth();
   const db = firebase.firestore();
-
   const repoPath = "/refferal-napcash";
 
   const userEmailSpan = document.getElementById("userEmail");
@@ -131,23 +126,30 @@
   const logoutBtn = document.getElementById("logoutBtn");
   const copyBtn = document.getElementById("copyBtn");
   const withdrawBtn = document.getElementById("withdrawBtn");
+  const activateBtn = document.getElementById("activateBtn");
+
+  const whatsappNumber = "+254718439373"; 
+
+  function openWhatsApp(fullName) {
+    const message = encodeURIComponent(`Hi Admin, I want to activate my account. My name is ${fullName}`);
+    const url = `https://wa.me/${whatsappNumber.replace(/\D/g,'')}?text=${message}`;
+    window.open(url, "_blank");
+  }
 
   auth.onAuthStateChanged(async user => {
-    if(!user){
-      window.location.href = `${repoPath}/login.html`;
-      return;
-    }
-
+    if(!user){ window.location.href = `${repoPath}/login.html`; return; }
     const uid = user.uid;
     const userDoc = await db.collection("users").doc(uid).get();
     if(!userDoc.exists) return;
 
     const data = userDoc.data();
+    const fullName = data.fullName || data.name || "User";
+
     userEmailSpan.textContent = data.email;
     statusSpan.textContent = data.status;
     refCodeSpan.textContent = data.referralCode;
 
-    // Generate referral link
+    // Referral link
     const referralLink = `${window.location.origin}${repoPath}/register.html?ref=${data.referralCode}`;
     refLinkInput.value = referralLink;
 
@@ -157,7 +159,7 @@
         .catch(()=>alert("Failed to copy link"));
     };
 
-    // Referrals list (all accounts with status)
+    // Referred accounts with colored badges
     const refSnap = await db.collection("users")
                             .where("referredBy","==",data.referralCode)
                             .get();
@@ -166,14 +168,35 @@
       refSnap.docs.forEach(doc => {
         const d = doc.data();
         const li = document.createElement("li");
-        li.textContent = `${d.name || d.fullName} - Status: ${d.status}`;
+        li.style.display = "flex";
+        li.style.justifyContent = "space-between";
+        li.style.alignItems = "center";
+        li.style.padding = "10px";
+        li.style.borderRadius = "6px";
+        li.style.marginBottom = "8px";
+        li.style.backgroundColor = "#222";
+        
+        const nameSpan = document.createElement("span");
+        nameSpan.textContent = d.fullName || d.name;
+
+        const statusSpanBadge = document.createElement("span");
+        statusSpanBadge.textContent = d.status.toUpperCase();
+        statusSpanBadge.style.padding = "4px 8px";
+        statusSpanBadge.style.borderRadius = "4px";
+        statusSpanBadge.style.fontWeight = "bold";
+        statusSpanBadge.style.color = "#fff";
+        statusSpanBadge.style.fontSize = "0.85rem";
+        statusSpanBadge.style.backgroundColor = d.status === "active" ? "green" : "orange";
+
+        li.appendChild(nameSpan);
+        li.appendChild(statusSpanBadge);
         referralsList.appendChild(li);
       });
     } else {
       referralsList.innerHTML = "<li>No referrals yet</li>";
     }
 
-    // Calculate earnings (only active referrals)
+    // Earnings from active referrals
     const activeRefSnap = await db.collection("users")
                                   .where("referredBy","==",data.referralCode)
                                   .where("status","==","active")
@@ -182,15 +205,22 @@
     activeRefSnap.forEach(doc => totalEarnings += 50);
     earningsSpan.textContent = totalEarnings;
 
-    // Withdraw button logic
+    // Withdraw button
     if(data.status !== "active"){
-      withdrawBtn.disabled = true;
       withdrawBtn.textContent = "Activate account to withdraw";
+      withdrawBtn.onclick = () => openWhatsApp(fullName);
     } else {
-      withdrawBtn.disabled = false;
       withdrawBtn.textContent = "Withdraw";
+      withdrawBtn.onclick = () => alert("Withdraw functionality not implemented yet");
     }
 
+    // Status card activate button
+    if(data.status !== "active"){
+      activateBtn.style.display = "inline-block";
+      activateBtn.onclick = () => openWhatsApp(fullName);
+    } else {
+      activateBtn.style.display = "none";
+    }
   });
 
   logoutBtn.onclick = async () => {
