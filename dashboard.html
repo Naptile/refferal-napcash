@@ -45,7 +45,7 @@
       <!-- Referral Link Card -->
       <div class="info-card">
         <h3>Referral Link</h3>
-        <p id="refLink">Loading...</p>
+        <input type="text" id="refLink" readonly style="width:100%; padding:5px; border-radius:5px; border:none; color:#000;">
         <button id="copyBtn">Copy Link</button>
       </div>
     </div>
@@ -78,23 +78,28 @@
   const statusSpan = document.getElementById("status");
   const refCodeSpan = document.getElementById("refCode");
   const earningsSpan = document.getElementById("earnings");
-  const refLinkSpan = document.getElementById("refLink");
+  const refLinkInput = document.getElementById("refLink");
   const referralsList = document.getElementById("referralsList");
   const logoutBtn = document.getElementById("logoutBtn");
   const copyBtn = document.getElementById("copyBtn");
+
+  const repoPath = "/refferal-napcash"; // your GitHub Pages repo path
 
   auth.onAuthStateChanged(async user => {
     if(user){
       userEmailSpan.textContent = user.email;
       const uid = user.uid;
+
       const userDoc = await db.collection("users").doc(uid).get();
       if(userDoc.exists){
         const data = userDoc.data();
         statusSpan.textContent = data.status;
         refCodeSpan.textContent = data.referralCode;
         earningsSpan.textContent = data.earnings || 0;
-        const referralLink = `${window.location.origin}/register.html?ref=${data.referralCode}`;
-        refLinkSpan.textContent = referralLink;
+
+        // Correct referral link for GitHub Pages
+        const referralLink = `${window.location.origin}${repoPath}/register.html?ref=${data.referralCode}`;
+        refLinkInput.value = referralLink;
 
         // Copy referral link button
         copyBtn.onclick = () => {
@@ -110,7 +115,7 @@
           refSnap.docs.forEach(doc=>{
             const d = doc.data();
             const li = document.createElement("li");
-            li.textContent = `${d.fullName} - Status: ${d.status}`;
+            li.textContent = `${d.name || d.fullName} - Status: ${d.status}`;
             referralsList.appendChild(li);
           });
         } else {
@@ -118,13 +123,13 @@
         }
       }
     } else {
-      window.location.href = "login.html";
+      window.location.href = `${repoPath}/login.html`;
     }
   });
 
   logoutBtn.onclick = async () => {
     await auth.signOut();
-    window.location.href = "login.html";
+    window.location.href = `${repoPath}/login.html`;
   };
 </script>
 
