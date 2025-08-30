@@ -146,3 +146,48 @@ body {
         margin: 10px 0 5px 0;
     }
 }
+/* Mobile-Friendly Dashboard */
+@media (max-width: 768px) {
+    .dashboard-grid {
+        grid-template-columns: 1fr; /* stack cards vertically */
+        gap: 15px;
+    }
+
+    .nav {
+        flex-direction: column;
+        align-items: flex-start;
+        padding: 15px;
+    }
+
+    .nav div {
+        margin-top: 10px;
+    }
+
+    .info-card {
+        padding: 15px;
+        font-size: 0.95rem;
+    }
+
+    .referral-list li {
+        font-size: 0.9rem;
+        padding: 10px;
+    }
+
+    .hero {
+        padding: 20px 10px;
+    }
+
+    .card {
+        padding: 20px;
+    }
+
+    #refLink {
+        font-size: 0.9rem;
+    }
+
+    button {
+        padding: 12px;
+        font-size: 0.95rem;
+    }
+}
+
