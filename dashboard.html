@@ -23,9 +23,9 @@
     .info-card { background:#222; padding:20px; border-radius:10px; text-align:center; transition:0.2s; }
     .info-card h3 { color:orange; margin-bottom:8px; }
     input#refLink { width:100%; padding:5px; border:none; border-radius:5px; color:#000; margin-bottom:8px; }
-    .referral-list { list-style:none; padding-left:0; margin-top:10px; }
-    .referral-list li { display:flex; justify-content:space-between; align-items:center; background:#222; padding:10px; border-radius:6px; margin-bottom:8px; }
-    .referral-list li span.status { font-weight:bold; padding:4px 8px; border-radius:4px; font-size:0.85rem; color:#fff; }
+    .referral-list, .withdrawal-list { list-style:none; padding-left:0; margin-top:10px; }
+    .referral-list li, .withdrawal-list li { display:flex; justify-content:space-between; align-items:center; background:#222; padding:10px; border-radius:6px; margin-bottom:8px; }
+    .referral-list li span.status, .withdrawal-list li span.status { font-weight:bold; padding:4px 8px; border-radius:4px; font-size:0.85rem; color:#fff; }
     @media (max-width:768px){
       .hamburger{display:block;}
       .nav-links { display:none; flex-direction:column; background:#222; position:absolute; top:60px; left:0; width:100%; padding:15px; gap:10px; border-top:1px solid orange; }
@@ -33,7 +33,7 @@
       .hero { padding:15px; }
       .card { padding:15px; }
       .info-card { font-size:0.95rem; padding:15px; }
-      .referral-list li { font-size:0.9rem; padding:10px; }
+      .referral-list li, .withdrawal-list li { font-size:0.9rem; padding:10px; }
       #refLink { font-size:0.9rem; }
       button { padding:12px; font-size:0.95rem; }
     }
@@ -86,6 +86,12 @@
         <li>Loading...</li>
       </ul>
     </div>
+    <div style="margin-top:20px;">
+      <h3>Withdrawal History</h3>
+      <ul id="withdrawalsList" class="withdrawal-list">
+        <li>No withdrawals yet</li>
+      </ul>
+    </div>
   </div>
 </div>
 
@@ -124,6 +130,7 @@ const refCodeSpan = document.getElementById("refCode");
 const earningsSpan = document.getElementById("earnings");
 const refLinkInput = document.getElementById("refLink");
 const referralsList = document.getElementById("referralsList");
+const withdrawalsList = document.getElementById("withdrawalsList");
 const logoutBtn = document.getElementById("logoutBtn");
 const copyBtn = document.getElementById("copyBtn");
 const activateBtn = document.getElementById("activateBtn");
@@ -200,20 +207,25 @@ auth.onAuthStateChanged(async user => {
     profileModal.style.display = "flex";
   };
 
-  // Track paid withdrawals only once
-  let handledPaidWithdrawals = new Set();
+  // Withdrawals history listener
   db.collection("withdrawals")
     .where("userId", "==", uid)
-    .where("status", "==", "paid")
+    .orderBy("createdAt", "desc")
     .onSnapshot(snapshot => {
-      snapshot.docChanges().forEach(change => {
-        const id = change.doc.id;
-        if(change.type === "added" && !handledPaidWithdrawals.has(id)){
-          handledPaidWithdrawals.add(id);
-          earningsSpan.textContent = "0";
-          alert("Your withdrawal has been processed and marked as paid!");
-        }
-      });
+      withdrawalsList.innerHTML = "";
+      if(snapshot.empty){
+        withdrawalsList.innerHTML = "<li>No withdrawals yet</li>";
+      } else {
+        snapshot.forEach(doc=>{
+          const d = doc.data();
+          const li=document.createElement("li");
+          li.innerHTML = `<span>KSh ${d.amount || 0}</span>
+                          <span class="status" style="background:${
+                            d.status==="paid"?"green": d.status==="pending"?"orange":"red"
+                          }">${d.status.toUpperCase()}</span>`;
+          withdrawalsList.appendChild(li);
+        });
+      }
     });
 });
 
