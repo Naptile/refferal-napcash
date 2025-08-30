@@ -16,6 +16,7 @@
     .nav-links { display:flex; gap:10px; align-items:center; }
     .btn-orange { background:orange; border:none; color:black; font-weight:bold; padding:8px 12px; border-radius:6px; cursor:pointer; transition:0.3s; }
     .btn-orange:hover { background:#ff9900; color:#fff; }
+    .btn-disabled { background:#555 !important; color:#ccc !important; cursor:not-allowed !important; }
     .hero { max-width:1000px; margin:20px auto; padding:20px; }
     .card { background:#111; padding:25px; border-radius:12px; box-shadow:0 5px 20px rgba(0,0,0,0.5); }
     .dashboard-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:20px; margin-top:20px; }
@@ -199,14 +200,19 @@ auth.onAuthStateChanged(async user => {
   activeRefSnap.forEach(doc => totalEarnings += 50);
   earningsSpan.textContent = totalEarnings;
 
-  // Withdraw button
+  // Withdraw button logic with earnings check
   if(data.status !== "active"){
     withdrawBtn.textContent = "Activate account to withdraw";
+    withdrawBtn.classList.add("btn-disabled");
     withdrawBtn.onclick = () => openWhatsApp(fullName);
+  } else if(totalEarnings <= 0){
+    withdrawBtn.textContent = "No earnings to withdraw";
+    withdrawBtn.classList.add("btn-disabled");
+    withdrawBtn.onclick = null;
   } else {
     withdrawBtn.textContent = "Withdraw";
+    withdrawBtn.classList.remove("btn-disabled");
     withdrawBtn.onclick = async () => {
-      if(totalEarnings <= 0){ alert("You have no earnings to withdraw!"); return; }
       await db.collection("withdrawals").add({
         userId: uid,
         amount: totalEarnings,
