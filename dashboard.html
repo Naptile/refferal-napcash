@@ -37,7 +37,6 @@
       #refLink { font-size:0.9rem; }
       button { padding:12px; font-size:0.95rem; }
     }
-    /* Profile Modal */
     .modal { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); justify-content:center; align-items:center; z-index:1000; }
     .modal-content { background:#111; padding:20px; border-radius:10px; width:90%; max-width:400px; display:flex; flex-direction:column; gap:10px; }
     .modal-content input { padding:8px; border-radius:5px; border:none; }
@@ -90,7 +89,6 @@
   </div>
 </div>
 
-<!-- Profile Modal -->
 <div class="modal" id="profileModal">
   <div class="modal-content">
     <span class="close-modal" id="closeModal">&times;</span>
@@ -165,12 +163,10 @@ auth.onAuthStateChanged(async user => {
   statusSpan.textContent = data.status;
   refCodeSpan.textContent = data.referralCode;
 
-  // Referral link
   const referralLink = `${window.location.origin}${repoPath}/register.html?ref=${data.referralCode}`;
   refLinkInput.value = referralLink;
   copyBtn.onclick = ()=>navigator.clipboard.writeText(referralLink).then(()=>alert("Referral link copied!")).catch(()=>alert("Failed to copy"));
 
-  // Referred accounts
   const refSnap = await db.collection("users").where("referredBy","==",data.referralCode).get();
   referralsList.innerHTML="";
   if(!refSnap.empty){
@@ -191,16 +187,15 @@ auth.onAuthStateChanged(async user => {
     });
   } else { referralsList.innerHTML="<li>No referrals yet</li>"; }
 
-  // Earnings from active referrals
+  let totalEarnings = 0;
   const activeRefSnap = await db.collection("users")
                                 .where("referredBy","==",data.referralCode)
                                 .where("status","==","active")
                                 .get();
-  let totalEarnings = 0;
   activeRefSnap.forEach(doc => totalEarnings += 50);
   earningsSpan.textContent = totalEarnings;
 
-  // Withdraw button logic with earnings check
+  // Withdraw button logic
   if(data.status !== "active"){
     withdrawBtn.textContent = "Activate account to withdraw";
     withdrawBtn.classList.add("btn-disabled");
@@ -219,17 +214,20 @@ auth.onAuthStateChanged(async user => {
         status: "pending",
         createdAt: firebase.firestore.FieldValue.serverTimestamp()
       });
+      earningsSpan.textContent = "0";
+      totalEarnings = 0;
+      withdrawBtn.textContent = "No earnings to withdraw";
+      withdrawBtn.classList.add("btn-disabled");
+      withdrawBtn.onclick = null;
       alert("Withdrawal request sent! Admin will process it shortly.");
     };
   }
 
-  // Status activate button
   if(data.status !== "active"){
     activateBtn.style.display = "inline-block";
     activateBtn.onclick = () => openWhatsApp(fullName);
   } else { activateBtn.style.display = "none"; }
 
-  // Profile modal
   profileBtn.onclick = () => {
     modalName.value = data.fullName || data.name || "";
     modalEmail.value = data.email || "";
@@ -237,19 +235,23 @@ auth.onAuthStateChanged(async user => {
     profileModal.style.display = "flex";
   };
 
-  // Real-time withdrawal updates
+  // Track paid withdrawals only once
+  let handledPaidWithdrawals = new Set();
   db.collection("withdrawals")
     .where("userId", "==", uid)
     .where("status", "==", "paid")
     .onSnapshot(snapshot => {
-      if(!snapshot.empty){
-        alert("Your withdrawal has been processed and marked as paid!");
-        earningsSpan.textContent = "0";
-      }
+      snapshot.docChanges().forEach(change => {
+        const id = change.doc.id;
+        if(change.type === "added" && !handledPaidWithdrawals.has(id)){
+          handledPaidWithdrawals.add(id);
+          earningsSpan.textContent = "0";
+          alert("Your withdrawal has been processed and marked as paid!");
+        }
+      });
     });
 });
 
-// Profile modal events
 closeModal.onclick = () => profileModal.style.display = "none";
 window.onclick = e => { if(e.target===profileModal) profileModal.style.display="none"; };
 saveProfileBtn.onclick = async () => {
@@ -266,7 +268,6 @@ saveProfileBtn.onclick = async () => {
   profileModal.style.display = "none";
 };
 
-// Logout
 logoutBtn.onclick = async () => {
   await auth.signOut();
   window.location.href = `${repoPath}/login.html`;
@@ -274,3 +275,4 @@ logoutBtn.onclick = async () => {
 </script>
 </body>
 </html>
+
