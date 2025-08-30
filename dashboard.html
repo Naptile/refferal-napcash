@@ -1,7 +1,3 @@
-
-
-
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -120,15 +116,9 @@ const db = firebase.firestore();
 const repoPath = "/refferal-napcash";
 const whatsappNumber = "+254718439373";
 
+// Elements
 const hamburger = document.getElementById("hamburger");
 const navLinks = document.getElementById("navLinks");
-hamburger.onclick = () => {
-  navLinks.style.display = navLinks.style.display === "flex" ? "none" : "flex";
-};
-navLinks.querySelectorAll("button").forEach(btn => {
-  btn.onclick = () => { if(window.innerWidth<=768) navLinks.style.display="none"; };
-});
-
 const userEmailSpan = document.getElementById("userEmail");
 const statusSpan = document.getElementById("status");
 const refCodeSpan = document.getElementById("refCode");
@@ -139,8 +129,6 @@ const logoutBtn = document.getElementById("logoutBtn");
 const copyBtn = document.getElementById("copyBtn");
 const activateBtn = document.getElementById("activateBtn");
 const withdrawBtn = document.getElementById("withdrawBtn");
-
-// Profile Modal Elements
 const profileBtn = document.getElementById("profileBtn");
 const profileModal = document.getElementById("profileModal");
 const closeModal = document.getElementById("closeModal");
@@ -149,18 +137,29 @@ const modalEmail = document.getElementById("modalEmail");
 const modalPhone = document.getElementById("modalPhone");
 const saveProfileBtn = document.getElementById("saveProfileBtn");
 
+// Hamburger
+hamburger.onclick = () => {
+  navLinks.style.display = navLinks.style.display === "flex" ? "none" : "flex";
+};
+navLinks.querySelectorAll("button").forEach(btn => {
+  btn.onclick = () => { if(window.innerWidth<=768) navLinks.style.display="none"; };
+});
+
+// WhatsApp Activation
 function openWhatsApp(fullName){
   const message = encodeURIComponent(`Hi Admin, I want to activate my account. My name is ${fullName}`);
   window.open(`https://wa.me/${whatsappNumber.replace(/\D/g,'')}?text=${message}`,"_blank");
 }
 
-auth.onAuthStateChanged(async user=>{
+// Auth
+auth.onAuthStateChanged(async user => {
   if(!user){ window.location.href=`${repoPath}/login.html`; return; }
   const uid = user.uid;
   const userDoc = await db.collection("users").doc(uid).get();
   if(!userDoc.exists) return;
   const data = userDoc.data();
   const fullName = data.fullName || data.name || "User";
+
   userEmailSpan.textContent = data.email;
   statusSpan.textContent = data.status;
   refCodeSpan.textContent = data.referralCode;
@@ -179,23 +178,19 @@ auth.onAuthStateChanged(async user=>{
       const li=document.createElement("li");
       li.style.display="flex"; li.style.justifyContent="space-between"; li.style.alignItems="center";
       li.style.padding="10px"; li.style.borderRadius="6px"; li.style.marginBottom="8px"; li.style.backgroundColor="#222";
-            const nameSpan=document.createElement("span");
+      const nameSpan=document.createElement("span");
       nameSpan.textContent = d.fullName || d.name;
-
       const statusSpanBadge=document.createElement("span");
       statusSpanBadge.textContent = d.status.toUpperCase();
       statusSpanBadge.classList.add("status");
       statusSpanBadge.style.backgroundColor = d.status === "active" ? "green" : "orange";
-
       li.appendChild(nameSpan);
       li.appendChild(statusSpanBadge);
       referralsList.appendChild(li);
     });
-  } else {
-    referralsList.innerHTML="<li>No referrals yet</li>";
-  }
+  } else { referralsList.innerHTML="<li>No referrals yet</li>"; }
 
-  // Earnings only from active referrals
+  // Earnings from active referrals
   const activeRefSnap = await db.collection("users")
                                 .where("referredBy","==",data.referralCode)
                                 .where("status","==","active")
@@ -210,16 +205,23 @@ auth.onAuthStateChanged(async user=>{
     withdrawBtn.onclick = () => openWhatsApp(fullName);
   } else {
     withdrawBtn.textContent = "Withdraw";
-    withdrawBtn.onclick = () => alert("Withdraw functionality not implemented yet");
+    withdrawBtn.onclick = async () => {
+      if(totalEarnings <= 0){ alert("You have no earnings to withdraw!"); return; }
+      await db.collection("withdrawals").add({
+        userId: uid,
+        amount: totalEarnings,
+        status: "pending",
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      alert("Withdrawal request sent! Admin will process it shortly.");
+    };
   }
 
   // Status activate button
   if(data.status !== "active"){
     activateBtn.style.display = "inline-block";
     activateBtn.onclick = () => openWhatsApp(fullName);
-  } else {
-    activateBtn.style.display = "none";
-  }
+  } else { activateBtn.style.display = "none"; }
 
   // Profile modal
   profileBtn.onclick = () => {
@@ -228,11 +230,22 @@ auth.onAuthStateChanged(async user=>{
     modalPhone.value = data.phone || "";
     profileModal.style.display = "flex";
   };
+
+  // Real-time withdrawal updates
+  db.collection("withdrawals")
+    .where("userId", "==", uid)
+    .where("status", "==", "paid")
+    .onSnapshot(snapshot => {
+      if(!snapshot.empty){
+        alert("Your withdrawal has been processed and marked as paid!");
+        earningsSpan.textContent = "0";
+      }
+    });
 });
 
+// Profile modal events
 closeModal.onclick = () => profileModal.style.display = "none";
-window.onclick = (e) => { if(e.target===profileModal) profileModal.style.display="none"; };
-
+window.onclick = e => { if(e.target===profileModal) profileModal.style.display="none"; };
 saveProfileBtn.onclick = async () => {
   const user = auth.currentUser;
   if(!user) return;
@@ -255,5 +268,3 @@ logoutBtn.onclick = async () => {
 </script>
 </body>
 </html>
-
-     
