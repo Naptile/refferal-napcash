@@ -9,7 +9,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
   <style>
-    body { background: #000; color: #fff; margin:0; font-family: Arial, sans-serif; }
+    body { background:#000; color:#fff; margin:0; font-family:Arial, sans-serif; }
     .nav { display:flex; align-items:center; justify-content:space-between; padding:15px 20px; background:#111; position:relative; }
     .brand { font-size:1.5rem; color:orange; font-weight:bold; }
     .hamburger { display:none; font-size:2rem; cursor:pointer; color:orange; margin-right:10px; }
@@ -154,7 +154,8 @@ function openWhatsApp(fullName){
 auth.onAuthStateChanged(async user => {
   if(!user){ window.location.href=`${repoPath}/login.html`; return; }
   const uid = user.uid;
-  const userDoc = await db.collection("users").doc(uid).get();
+  const userDocRef = db.collection("users").doc(uid);
+  const userDoc = await userDocRef.get();
   if(!userDoc.exists) return;
   const data = userDoc.data();
   const fullName = data.fullName || data.name || "User";
@@ -165,64 +166,28 @@ auth.onAuthStateChanged(async user => {
 
   const referralLink = `${window.location.origin}${repoPath}/register.html?ref=${data.referralCode}`;
   refLinkInput.value = referralLink;
-  copyBtn.onclick = ()=>navigator.clipboard.writeText(referralLink).then(()=>alert("Referral link copied!")).catch(()=>alert("Failed to copy"));
+  copyBtn.onclick = ()=>navigator.clipboard.writeText(referralLink).then(()=>alert("Referral link copied!"));
 
-  const refSnap = await db.collection("users").where("referredBy","==",data.referralCode).get();
-  referralsList.innerHTML="";
-  if(!refSnap.empty){
-    refSnap.docs.forEach(doc=>{
-      const d = doc.data();
-      const li=document.createElement("li");
-      li.style.display="flex"; li.style.justifyContent="space-between"; li.style.alignItems="center";
-      li.style.padding="10px"; li.style.borderRadius="6px"; li.style.marginBottom="8px"; li.style.backgroundColor="#222";
-      const nameSpan=document.createElement("span");
-      nameSpan.textContent = d.fullName || d.name;
-      const statusSpanBadge=document.createElement("span");
-      statusSpanBadge.textContent = d.status.toUpperCase();
-      statusSpanBadge.classList.add("status");
-      statusSpanBadge.style.backgroundColor = d.status === "active" ? "green" : "orange";
-      li.appendChild(nameSpan);
-      li.appendChild(statusSpanBadge);
-      referralsList.appendChild(li);
-    });
-  } else { referralsList.innerHTML="<li>No referrals yet</li>"; }
-
-  let totalEarnings = 0;
-  const activeRefSnap = await db.collection("users")
-                                .where("referredBy","==",data.referralCode)
-                                .where("status","==","active")
-                                .get();
-  activeRefSnap.forEach(doc => totalEarnings += 50);
-  earningsSpan.textContent = totalEarnings;
-
-  // Withdraw button logic
-  if(data.status !== "active"){
-    withdrawBtn.textContent = "Activate account to withdraw";
-    withdrawBtn.classList.add("btn-disabled");
-    withdrawBtn.onclick = () => openWhatsApp(fullName);
-  } else if(totalEarnings <= 0){
-    withdrawBtn.textContent = "No earnings to withdraw";
-    withdrawBtn.classList.add("btn-disabled");
-    withdrawBtn.onclick = null;
-  } else {
-    withdrawBtn.textContent = "Withdraw";
-    withdrawBtn.classList.remove("btn-disabled");
-    withdrawBtn.onclick = async () => {
-      await db.collection("withdrawals").add({
-        userId: uid,
-        amount: totalEarnings,
-        status: "pending",
-        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+  // Real-time referrals listener
+  db.collection("users").where("referredBy","==",data.referralCode)
+    .onSnapshot(snapshot => {
+      referralsList.innerHTML="";
+      let totalEarnings=0;
+      snapshot.forEach(doc=>{
+        const d = doc.data();
+        const li=document.createElement("li");
+        li.innerHTML=`<span>${d.fullName||d.name}</span> 
+                      <span class="status" style="background:${d.status==="active"?"green":"orange"}">
+                        ${d.status.toUpperCase()}
+                      </span>`;
+        referralsList.appendChild(li);
+        if(d.status==="active"){ totalEarnings+=50; }
       });
-      earningsSpan.textContent = "0";
-      totalEarnings = 0;
-      withdrawBtn.textContent = "No earnings to withdraw";
-      withdrawBtn.classList.add("btn-disabled");
-      withdrawBtn.onclick = null;
-      alert("Withdrawal request sent! Admin will process it shortly.");
-    };
-  }
+      earningsSpan.textContent=totalEarnings;
+      updateWithdrawButton(data.status, fullName, uid, totalEarnings);
+    });
 
+  // Activation button
   if(data.status !== "active"){
     activateBtn.style.display = "inline-block";
     activateBtn.onclick = () => openWhatsApp(fullName);
@@ -252,13 +217,37 @@ auth.onAuthStateChanged(async user => {
     });
 });
 
+// Update Withdraw button dynamically
+function updateWithdrawButton(status, fullName, uid, totalEarnings){
+  if(status !== "active"){
+    withdrawBtn.textContent = "Activate account to withdraw";
+    withdrawBtn.classList.add("btn-disabled");
+    withdrawBtn.onclick = () => openWhatsApp(fullName);
+  } else if(totalEarnings <= 0){
+    withdrawBtn.textContent = "No earnings to withdraw";
+    withdrawBtn.classList.add("btn-disabled");
+    withdrawBtn.onclick = null;
+  } else {
+    withdrawBtn.textContent = "Withdraw";
+    withdrawBtn.classList.remove("btn-disabled");
+    withdrawBtn.onclick = async () => {
+      await db.collection("withdrawals").add({
+        userId: uid,
+        amount: totalEarnings,
+        status: "pending",
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      alert("Withdrawal request sent! Admin will process it shortly.");
+    };
+  }
+}
+
 closeModal.onclick = () => profileModal.style.display = "none";
 window.onclick = e => { if(e.target===profileModal) profileModal.style.display="none"; };
 saveProfileBtn.onclick = async () => {
   const user = auth.currentUser;
   if(!user) return;
-  const uid = user.uid;
-  await db.collection("users").doc(uid).update({
+  await db.collection("users").doc(user.uid).update({
     fullName: modalName.value,
     email: modalEmail.value,
     phone: modalPhone.value,
@@ -275,5 +264,3 @@ logoutBtn.onclick = async () => {
 </script>
 </body>
 </html>
-
-
