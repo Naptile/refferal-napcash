@@ -117,11 +117,11 @@ auth.onAuthStateChanged(async user => {
   // Show status
   statusText.textContent = userData.status || "inactive";
 
-  // ✅ Activate button logic
+  // Hide Activate button if already active
   if (userData.status === "active") {
-    activateBtn.style.display = "none"; // hide if active
+    activateBtn.style.display = "none";
   } else {
-    activateBtn.style.display = "inline-block";
+    // Activate button → WhatsApp
     activateBtn.onclick = () => {
       const msg = `Hi Admin, I want to activate my account. My name is ${userData.name || ""}`;
       const url = `https://wa.me/254718439373?text=${encodeURIComponent(msg)}`;
