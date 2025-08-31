@@ -8,6 +8,25 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+  <style>
+    /* Make tables scrollable on mobile */
+    .users-table {
+      width: 100%;
+      border-collapse: collapse;
+      overflow-x: auto;
+      display: block;
+    }
+    .users-table th, .users-table td {
+      padding: 8px;
+      text-align: left;
+      border: 1px solid #444;
+    }
+    .bg { background:#000; color:#fff; font-family: Arial, sans-serif; margin:0; padding:0; }
+    .nav { display:flex; justify-content:space-between; padding:15px; background:#111; }
+    .brand { color:orange; font-weight:bold; font-size:1.5rem; }
+    .card { background:#111; padding:20px; margin:20px; border-radius:10px; }
+    button { cursor:pointer; }
+  </style>
 </head>
 <body class="bg">
 
@@ -22,32 +41,6 @@
   <div class="card">
     <h2>Admin Dashboard</h2>
 
-    <!-- Add Member Form -->
-    <div class="add-member-form">
-      <h3>Add New Member</h3>
-      <input type="text" id="newFullName" placeholder="Full Name" required>
-      <input type="email" id="newEmail" placeholder="Email" required>
-      <input type="text" id="newPhone" placeholder="Phone Number" required>
-      <input type="text" id="newReferralCode" placeholder="Referral Code (optional)">
-      <input type="text" id="newReferredBy" placeholder="Referred By (optional)">
-      <button id="addMemberBtn">Add Member</button>
-    </div>
-
-    <!-- Search and Export -->
-    <div class="search-bar">
-      <input type="text" id="searchInput" placeholder="Search by name, email, phone, or referral code...">
-      <select id="statusFilter">
-        <option value="">All Status</option>
-        <option value="pending">Pending</option>
-        <option value="active">Active</option>
-        <option value="deactivated">Deactivated</option>
-      </select>
-      <button id="searchBtn">Search</button>
-      <button id="resetBtn">Reset</button>
-      <button id="exportBtn">Export All Users</button>
-      <button id="exportReferralsBtn">Export Referrals Only</button>
-    </div>
-
     <!-- Users Table -->
     <h3>All Users</h3>
     <table class="users-table">
@@ -59,12 +52,13 @@
           <th>Status</th>
           <th>Referral Code</th>
           <th>Earnings (KSh)</th>
+          <th>Active Referrals</th>
           <th>Referred By</th>
           <th>Action</th>
         </tr>
       </thead>
       <tbody id="usersTableBody">
-        <tr><td colspan="8">Loading users...</td></tr>
+        <tr><td colspan="9">Loading users...</td></tr>
       </tbody>
     </table>
 
@@ -85,7 +79,6 @@
         <tr><td colspan="6">Loading withdrawals...</td></tr>
       </tbody>
     </table>
-
   </div>
 </div>
 
@@ -98,7 +91,6 @@ const firebaseConfig = {
   messagingSenderId: "720221815295",
   appId: "1:720221815295:web:e8b299b30909c6cc9927ca"
 };
-
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.firestore();
@@ -111,42 +103,8 @@ let allUsers = [];
 
 auth.onAuthStateChanged(async user => {
   if (!user) return window.location.href = "login.html";
-  loadUsers();
-  loadWithdrawals();
-});
-
-// Add Member
-document.getElementById("addMemberBtn").addEventListener("click", async () => {
-  const fullName = document.getElementById("newFullName").value.trim();
-  const email = document.getElementById("newEmail").value.trim();
-  const phone = document.getElementById("newPhone").value.trim();
-  const referralCode = document.getElementById("newReferralCode").value.trim() || null;
-  const referredBy = document.getElementById("newReferredBy").value.trim() || null;
-
-  if (!fullName || !email || !phone) {
-    alert("Please fill in Full Name, Email, and Phone Number.");
-    return;
-  }
-
-  await db.collection("users").add({
-    fullName,
-    email,
-    phone,
-    referralCode,
-    referredBy,
-    status: "pending",
-    earnings: 0,
-    createdAt: firebase.firestore.FieldValue.serverTimestamp()
-  });
-
-  alert("New member added successfully!");
-  document.getElementById("newFullName").value = "";
-  document.getElementById("newEmail").value = "";
-  document.getElementById("newPhone").value = "";
-  document.getElementById("newReferralCode").value = "";
-  document.getElementById("newReferredBy").value = "";
-
-  loadUsers();
+  await loadUsers();
+  await loadWithdrawals();
 });
 
 // Load Users
@@ -156,21 +114,23 @@ async function loadUsers() {
   renderUsers(allUsers);
 }
 
-function renderUsers(users) {
+// Render Users Table
+async function renderUsers(users) {
   if (users.length === 0) {
-    usersTableBody.innerHTML = "<tr><td colspan='8'>No users found</td></tr>";
+    usersTableBody.innerHTML = "<tr><td colspan='9'>No users found</td></tr>";
     return;
   }
 
   usersTableBody.innerHTML = "";
-  users.forEach(u => {
+  for (const u of users) {
+    // Count active referrals for this user
+    const refSnap = await db.collection("users")
+      .where("referredBy","==", u.referralCode)
+      .where("status","==","active")
+      .get();
+    const activeReferrals = refSnap.size;
+
     const tr = document.createElement("tr");
-
-    // Row color classes
-    if (u.status === "pending") tr.classList.add("pending");
-    if (u.status === "deactivated") tr.classList.add("deactivated");
-
-    // Action buttons
     let actionButtons = "";
     if (u.status === "pending") {
       actionButtons += `<button onclick="activateUser('${u.id}')">Activate</button>`;
@@ -188,20 +148,20 @@ function renderUsers(users) {
       <td>${u.status || "pending"}</td>
       <td>${u.referralCode || "N/A"}</td>
       <td>${u.earnings || 0}</td>
+      <td>${activeReferrals}</td>
       <td>${u.referredBy || "None"}</td>
       <td>${actionButtons}</td>
     `;
     usersTableBody.appendChild(tr);
-  });
+  }
 }
 
-// Activate/Deactivate functions
+// Activate/Deactivate Users
 async function activateUser(userId) {
   await db.collection("users").doc(userId).update({ status: "active" });
   alert("User activated!");
   loadUsers();
 }
-
 async function deactivateUser(userId) {
   await db.collection("users").doc(userId).update({ status: "deactivated" });
   alert("User deactivated!");
@@ -210,20 +170,22 @@ async function deactivateUser(userId) {
 
 // Load Withdrawals
 async function loadWithdrawals() {
-  const snapshot = await db.collection("withdrawals").orderBy("createdAt", "desc").get();
-  if (snapshot.empty) {
+  const snapshot = await db.collection("withdrawals").orderBy("createdAt","desc").get();
+  if(snapshot.empty){
     withdrawalsTableBody.innerHTML = "<tr><td colspan='6'>No withdrawals yet</td></tr>";
     return;
   }
 
   withdrawalsTableBody.innerHTML = "";
-  for (const doc of snapshot.docs) {
+  for(const doc of snapshot.docs){
     const w = doc.data();
-    const user = await db.collection("users").doc(w.userId).get();
-    const userData = user.exists ? user.data() : {};
+    const userDoc = await db.collection("users").doc(w.userId).get();
+    const userData = userDoc.exists ? userDoc.data() : {};
 
     const tr = document.createElement("tr");
     const date = w.createdAt ? w.createdAt.toDate().toLocaleString() : "Unknown";
+
+    let actionCell = w.status === "pending" ? `<button onclick="markPaid('${doc.id}', '${w.userId}')">Mark Paid</button>` : "—";
 
     tr.innerHTML = `
       <td>${userData.fullName || "Unknown"}</td>
@@ -231,74 +193,44 @@ async function loadWithdrawals() {
       <td>${w.amount}</td>
       <td>${w.status}</td>
       <td>${date}</td>
-      <td>
-        ${w.status === "pending" ? `<button onclick="markPaid('${doc.id}')">Mark Paid</button>` : "—"}
-      </td>
+      <td>${actionCell}</td>
     `;
     withdrawalsTableBody.appendChild(tr);
   }
 }
 
-// Mark Withdrawal as Paid
-async function markPaid(withdrawalId) {
+// Mark Withdrawal as Paid + reset user earnings
+async function markPaid(withdrawalId, userId) {
+  // Mark withdrawal paid
   await db.collection("withdrawals").doc(withdrawalId).update({ status: "paid" });
-  alert("Withdrawal marked as Paid.");
+
+  // Get user and update earnings + lastWithdrawCount
+  const userRef = db.collection("users").doc(userId);
+  const userDoc = await userRef.get();
+  if(userDoc.exists){
+    const u = userDoc.data();
+    const activeRefSnap = await db.collection("users")
+      .where("referredBy","==", u.referralCode)
+      .where("status","==","active")
+      .get();
+    await userRef.update({
+      earnings: 0,
+      lastWithdrawCount: activeRefSnap.size,
+      withdrawalRequested: false,
+      withdrawalRequestedAt: null
+    });
+  }
+
+  alert("Withdrawal marked as Paid and user earnings reset.");
   loadWithdrawals();
+  loadUsers();
 }
 
-// Export Users
-document.getElementById("exportBtn").addEventListener("click", () => {
-  if (allUsers.length === 0) {
-    alert("No users to export!");
-    return;
-  }
-
-  const headers = ["Full Name", "Email", "Phone", "Status", "Referral Code", "Earnings", "Referred By"];
-  const rows = allUsers.map(u => [
-    `"${u.fullName || "N/A"}"`,
-    `"${u.email || "N/A"}"`,
-    `"${u.phone || "N/A"}"`,
-    `"${u.status || "pending"}"`,
-    `"${u.referralCode || "N/A"}"`,
-    `"${u.earnings || 0}"`,
-    `"${u.referredBy || "None"}"`
-  ]);
-
-  const csvContent = [headers.join(","), ...rows.map(r => r.join(","))].join("\n");
-  downloadCSV(csvContent, "napcash_users.csv");
-});
-
-// Export Referrals Only
-document.getElementById("exportReferralsBtn").addEventListener("click", () => {
-  const rows = allUsers
-    .filter(u => u.referredBy && u.referredBy !== "None")
-    .map(u => [`"${u.fullName || u.email}"`, `"${u.referredBy}"`]);
-
-  if (rows.length === 0) {
-    alert("No referral data found!");
-    return;
-  }
-
-  const headers = ["User", "Referred By"];
-  const csvContent = [headers.join(","), ...rows.map(r => r.join(","))].join("\n");
-  downloadCSV(csvContent, "napcash_referrals.csv");
-});
-
-// Utility
-function downloadCSV(csvContent, filename) {
-  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = filename;
-  link.click();
-}
-
-logoutBtn.onclick = async () => {
+// Logout
+logoutBtn.onclick = async ()=>{
   await auth.signOut();
   window.location.href = "login.html";
 };
 </script>
-
 </body>
 </html>
