@@ -26,17 +26,6 @@
     .referral-list, .withdrawal-list { list-style:none; padding-left:0; margin-top:10px; }
     .referral-list li, .withdrawal-list li { display:flex; justify-content:space-between; align-items:center; background:#222; padding:10px; border-radius:6px; margin-bottom:8px; }
     .referral-list li span.status, .withdrawal-list li span.status { font-weight:bold; padding:4px 8px; border-radius:4px; font-size:0.85rem; color:#fff; }
-    @media (max-width:768px){
-      .hamburger{display:block;}
-      .nav-links { display:none; flex-direction:column; background:#222; position:absolute; top:60px; left:0; width:100%; padding:15px; gap:10px; border-top:1px solid orange; }
-      .dashboard-grid { grid-template-columns:1fr; gap:15px; }
-      .hero { padding:15px; }
-      .card { padding:15px; }
-      .info-card { font-size:0.95rem; padding:15px; }
-      .referral-list li, .withdrawal-list li { font-size:0.9rem; padding:10px; }
-      #refLink { font-size:0.9rem; }
-      button { padding:12px; font-size:0.95rem; }
-    }
   </style>
 </head>
 <body>
@@ -129,16 +118,24 @@ auth.onAuthStateChanged(async user => {
   refLinkInput.value = referralLink;
   copyBtn.onclick = ()=>navigator.clipboard.writeText(referralLink).then(()=>alert("Referral link copied!"));
 
-  // Earnings
-  const activeRefSnap = await db.collection("users").where("referredBy","==",data.referralCode).where("status","==","active").get();
-  let totalEarnings = 0;
-  activeRefSnap.forEach(doc => totalEarnings += 50);
+  // Earnings from active referrals
+  const activeRefSnap = await db.collection("users")
+    .where("referredBy","==",data.referralCode)
+    .where("status","==","active")
+    .get();
+
+  let totalEarnings = activeRefSnap.size * 50;
   earningsSpan.textContent = totalEarnings;
 
   // Withdraw history + button logic
   db.collection("withdrawals").where("userId","==",uid).orderBy("createdAt","desc").onSnapshot(snap=>{
     withdrawalsList.innerHTML="";
-    if(snap.empty){ withdrawalsList.innerHTML="<li>No withdrawals yet</li>"; withdrawBtn.disabled = totalEarnings <= 0; return; }
+    let lastStatus = null;
+    if(snap.empty){ 
+      withdrawalsList.innerHTML="<li>No withdrawals yet</li>"; 
+      withdrawBtn.disabled = totalEarnings <= 0; 
+      return; 
+    }
 
     snap.forEach((doc,i)=>{
       const d = doc.data();
@@ -152,11 +149,18 @@ auth.onAuthStateChanged(async user => {
         <span class="status" style="background:${d.status==="paid"?"green":d.status==="pending"?"orange":"red"}">${d.status.toUpperCase()}</span>`;
       withdrawalsList.appendChild(li);
 
-      // Latest status
-      if(i===0){
+      if(i===0){ // most recent
+        lastStatus = d.status;
         withdrawStatus.textContent = `Last withdrawal: ${d.status.toUpperCase()}`;
-        // Disable withdraw until new referral earns again
-        withdrawBtn.disabled = (d.status==="pending" || totalEarnings <= 0);
+
+        // New rules:
+        if(d.status==="pending"){ 
+          withdrawBtn.disabled = true; 
+        } else if(d.status==="paid" && totalEarnings<=0){ 
+          withdrawBtn.disabled = true; 
+        } else { 
+          withdrawBtn.disabled = totalEarnings <= 0; 
+        }
       }
     });
   });
