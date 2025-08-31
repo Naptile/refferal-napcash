@@ -10,29 +10,40 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
   <style>
     body { background:#000; color:#fff; margin:0; font-family: Arial, sans-serif; }
-    .nav { display:flex; align-items:center; justify-content:space-between; padding:15px 20px; background:#111; }
+    .nav { display:flex; align-items:center; justify-content:space-between; padding:15px 20px; background:#111; position:relative; }
     .brand { font-size:1.5rem; color:orange; font-weight:bold; }
+    .hamburger { display:none; font-size:2rem; cursor:pointer; color:orange; margin-right:10px; }
+    .nav-links { display:flex; gap:10px; align-items:center; }
     .btn-orange { background:orange; border:none; color:black; font-weight:bold; padding:8px 12px; border-radius:6px; cursor:pointer; transition:0.3s; }
-    .btn-orange:disabled { background:gray; color:#ddd; cursor:not-allowed; }
-    .btn-orange:hover:enabled { background:#ff9900; color:#fff; }
+    .btn-orange:hover { background:#ff9900; color:#fff; }
     .hero { max-width:1000px; margin:20px auto; padding:20px; }
-    .card { background:#111; padding:25px; border-radius:12px; }
+    .card { background:#111; padding:25px; border-radius:12px; box-shadow:0 5px 20px rgba(0,0,0,0.5); }
     .dashboard-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:20px; margin-top:20px; }
-    .info-card { background:#222; padding:20px; border-radius:10px; text-align:center; }
+    .info-card { background:#222; padding:20px; border-radius:10px; text-align:center; transition:0.2s; }
     .info-card h3 { color:orange; margin-bottom:8px; }
     input#refLink { width:100%; padding:5px; border:none; border-radius:5px; color:#000; margin-bottom:8px; }
     .referral-list, .withdrawal-list { list-style:none; padding-left:0; margin-top:10px; }
     .referral-list li, .withdrawal-list li { display:flex; justify-content:space-between; align-items:center; background:#222; padding:10px; border-radius:6px; margin-bottom:8px; }
-    .status-badge { font-size:0.8rem; padding:4px 8px; border-radius:4px; font-weight:bold; color:#fff; }
-    .active { background:green; }
-    .inactive { background:orange; }
+    .referral-list li span.status, .withdrawal-list li span.status { font-weight:bold; padding:4px 8px; border-radius:4px; font-size:0.85rem; color:#fff; }
+    @media (max-width:768px){
+      .hamburger{display:block;}
+      .nav-links { display:none; flex-direction:column; background:#222; position:absolute; top:60px; left:0; width:100%; padding:15px; gap:10px; border-top:1px solid orange; }
+      .dashboard-grid { grid-template-columns:1fr; gap:15px; }
+      .hero { padding:15px; }
+      .card { padding:15px; }
+      .info-card { font-size:0.95rem; padding:15px; }
+      .referral-list li, .withdrawal-list li { font-size:0.9rem; padding:10px; }
+      #refLink { font-size:0.9rem; }
+      button { padding:12px; font-size:0.95rem; }
+    }
   </style>
 </head>
 <body>
 
 <div class="nav">
+  <div class="hamburger" id="hamburger">&#9776;</div>
   <div class="brand">NapCash</div>
-  <div class="nav-links">
+  <div class="nav-links" id="navLinks">
     <button id="profileBtn" class="btn-orange">Profile</button>
     <span id="userEmail"></span>
     <button id="logoutBtn" class="btn-orange">Logout</button>
@@ -56,7 +67,6 @@
         <h3>Your Earnings</h3>
         <p>KSh <span id="earnings">0</span></p>
         <button id="withdrawBtn" class="btn-orange" style="margin-top:10px;">Withdraw</button>
-        <p id="withdrawStatus" style="margin-top:8px; font-size:0.9rem; color:orange;"></p>
       </div>
       <div class="info-card">
         <h3>Referral Link</h3>
@@ -93,128 +103,34 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.firestore();
+const repoPath = "/refferal-napcash";
 
-const withdrawBtn = document.getElementById("withdrawBtn");
-const withdrawStatus = document.getElementById("withdrawStatus");
-const earningsSpan = document.getElementById("earnings");
-const withdrawalsList = document.getElementById("withdrawalsList");
-const refCodeSpan = document.getElementById("refCode");
-const refLinkInput = document.getElementById("refLink");
-const copyBtn = document.getElementById("copyBtn");
-const statusText = document.getElementById("status");
+// Elements
 const activateBtn = document.getElementById("activateBtn");
+const statusText = document.getElementById("status");
 
-let userData = null;
-
-// Auth listener
+// Auth
 auth.onAuthStateChanged(async user => {
-  if (!user) return window.location.href="/login.html";
+  if (!user) { window.location.href = `${repoPath}/login.html`; return; }
   const uid = user.uid;
   const userDoc = await db.collection("users").doc(uid).get();
   if (!userDoc.exists) return;
-  userData = userDoc.data();
+  const userData = userDoc.data();
 
   // Show status
   statusText.textContent = userData.status || "inactive";
 
-  // Activate button → WhatsApp
-  activateBtn.onclick = () => {
-    const msg = `Hi Admin, I want to activate my account. My name is ${userData.name || ""}`;
-    const url = `https://wa.me/254718439373?text=${encodeURIComponent(msg)}`;
-    window.open(url, "_blank");
-  };
-
-  // Referral code & link
-  refCodeSpan.textContent = userData.referralCode;
-  const referralLink = `${window.location.origin}/register.html?ref=${userData.referralCode}`;
-  refLinkInput.value = referralLink;
-  copyBtn.onclick = ()=>navigator.clipboard.writeText(referralLink).then(()=>alert("Referral link copied!"));
-
-  // Referrals with status
-  const refSnap = await db.collection("users").where("referredBy","==",userData.referralCode).get();
-  const referralsList = document.getElementById("referralsList");
-  referralsList.innerHTML="";
-  if(refSnap.empty){ referralsList.innerHTML="<li>No referrals yet</li>"; }
-  refSnap.forEach(doc=>{
-    const d = doc.data();
-    const li = document.createElement("li");
-    li.innerHTML = `
-      <span>${d.name || d.email}</span>
-      <span class="status-badge ${d.status}">${d.status.toUpperCase()}</span>
-    `;
-    referralsList.appendChild(li);
-  });
-
-  // Earnings
-  const activeRefSnap = await db.collection("users")
-    .where("referredBy","==",userData.referralCode)
-    .where("status","==","active")
-    .get();
-  let totalEarnings = activeRefSnap.size * 50;
-  earningsSpan.textContent = totalEarnings;
-
-  // Withdrawals history
-  db.collection("withdrawals").where("userId","==",uid).orderBy("createdAt","desc").onSnapshot(snap=>{
-    withdrawalsList.innerHTML="";
-    if(snap.empty){ 
-      withdrawalsList.innerHTML="<li>No withdrawals yet</li>"; 
-      updateWithdrawBtn(totalEarnings, null, userData.status);
-      return; 
-    }
-    snap.forEach((doc,i)=>{
-      const d = doc.data();
-      const li = document.createElement("li");
-      const createdAt = d.createdAt?.toDate ? d.createdAt.toDate().toLocaleString() : "N/A";
-      li.innerHTML = `
-        <div style="flex:1;text-align:left;">
-          <strong>KSh ${d.amount}</strong><br>
-          <small>${createdAt} | ${d.method || "Mpesa"}</small>
-        </div>
-        <span class="status-badge ${d.status==="paid"?"active":"inactive"}">${d.status.toUpperCase()}</span>`;
-      withdrawalsList.appendChild(li);
-
-      if(i===0){
-        updateWithdrawBtn(totalEarnings, d.status, userData.status);
-        withdrawStatus.textContent = `Last withdrawal: ${d.status.toUpperCase()}`;
-      }
-    });
-  });
-
-  // Withdraw request
-  withdrawBtn.onclick = async ()=>{
-    if(userData.status!=="active") return alert("You must activate your account first.");
-    if(totalEarnings <= 0) return;
-    await db.collection("withdrawals").add({
-      userId: uid,
-      amount: totalEarnings,
-      status: "pending",
-      method: userData.paymentMethod || "Mpesa",
-      createdAt: firebase.firestore.FieldValue.serverTimestamp()
-    });
-    await db.collection("users").doc(uid).update({ earnings: 0 });
-    earningsSpan.textContent = 0;
-    updateWithdrawBtn(0, "pending", userData.status);
-    withdrawStatus.textContent = "Last withdrawal: PENDING";
-    alert("Withdrawal request sent!");
-  };
-
-  function updateWithdrawBtn(earnings, lastStatus, accountStatus){
-    if(accountStatus!=="active"){
-      withdrawBtn.textContent="Activate account first";
-      withdrawBtn.disabled=true;
-    }else if(lastStatus==="pending"){
-      withdrawBtn.textContent="Withdraw (Pending...)";
-      withdrawBtn.disabled=true;
-    }else if(earnings<=0){
-      withdrawBtn.textContent="Withdraw (No Earnings)";
-      withdrawBtn.disabled=true;
-    }else{
-      withdrawBtn.textContent="Withdraw";
-      withdrawBtn.disabled=false;
-    }
+  // Hide activate button if active, else open WhatsApp
+  if (userData.status === "active") {
+    activateBtn.style.display = "none";
+  } else {
+    activateBtn.onclick = () => {
+      const msg = `Hi Admin, I want to activate my account. My name is ${userData.fullName || ""}`;
+      const url = `https://wa.me/254718439373?text=${encodeURIComponent(msg)}`;
+      window.open(url, "_blank");
+    };
   }
 });
 </script>
 </body>
 </html>
-
