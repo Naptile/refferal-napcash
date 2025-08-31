@@ -21,13 +21,11 @@ body { background:#000; color:#fff; margin:0; font-family: Arial, sans-serif; }
 .info-card { background:#222; padding:20px; border-radius:10px; text-align:center; }
 .info-card h3 { color:orange; margin-bottom:8px; }
 input#refLink { width:100%; padding:5px; border:none; border-radius:5px; color:#000; margin-bottom:8px; }
-.referral-list, .withdrawal-list, .earnings-list { list-style:none; padding-left:0; margin-top:10px; }
-.referral-list li, .withdrawal-list li, .earnings-list li { display:flex; justify-content:space-between; align-items:center; background:#222; padding:10px; border-radius:6px; margin-bottom:8px; }
+.referral-list, .withdrawal-list { list-style:none; padding-left:0; margin-top:10px; }
+.referral-list li, .withdrawal-list li { display:flex; justify-content:space-between; align-items:center; background:#222; padding:10px; border-radius:6px; margin-bottom:8px; }
 .status-badge { font-size:0.8rem; padding:4px 8px; border-radius:4px; font-weight:bold; color:#fff; }
 .active { background:green; }
 .inactive { background:orange; }
-.credited { background:blue; }
-.pending { background:darkgoldenrod; }
 </style>
 </head>
 <body>
@@ -55,10 +53,14 @@ input#refLink { width:100%; padding:5px; border:none; border-radius:5px; color:#
         <p id="refCode">Loading...</p>
       </div>
       <div class="info-card">
-        <h3>Your Earnings</h3>
+        <h3>Your Balance</h3>
         <p>KSh <span id="earnings">0</span></p>
         <button id="withdrawBtn" class="btn-orange" style="margin-top:10px;">Withdraw</button>
         <p id="withdrawStatus" style="margin-top:8px; font-size:0.9rem; color:orange;"></p>
+      </div>
+      <div class="info-card">
+        <h3>Lifetime Earnings</h3>
+        <p>KSh <span id="lifetimeEarnings">0</span></p>
       </div>
       <div class="info-card">
         <h3>Referral Link</h3>
@@ -70,13 +72,6 @@ input#refLink { width:100%; padding:5px; border:none; border-radius:5px; color:#
     <div style="margin-top:20px;">
       <h3>People You Referred</h3>
       <ul id="referralsList" class="referral-list">
-        <li>Loading...</li>
-      </ul>
-    </div>
-
-    <div style="margin-top:20px;">
-      <h3>Earnings History</h3>
-      <ul id="earningsList" class="earnings-list">
         <li>Loading...</li>
       </ul>
     </div>
@@ -103,7 +98,10 @@ firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.firestore();
 
+const withdrawBtn = document.getElementById("withdrawBtn");
+const withdrawStatus = document.getElementById("withdrawStatus");
 const earningsSpan = document.getElementById("earnings");
+const lifetimeEarningsSpan = document.getElementById("lifetimeEarnings");
 const withdrawalsList = document.getElementById("withdrawalsList");
 const refCodeSpan = document.getElementById("refCode");
 const refLinkInput = document.getElementById("refLink");
@@ -113,20 +111,16 @@ const activateBtn = document.getElementById("activateBtn");
 const userEmail = document.getElementById("userEmail");
 const logoutBtn = document.getElementById("logoutBtn");
 const profileBtn = document.getElementById("profileBtn");
-const earningsList = document.getElementById("earningsList");
 
 let userData = null;
 let uid = null;
-let withdrawnRefs = [];
 
 auth.onAuthStateChanged(async user => {
   if(!user) return window.location.href="https://naptile.github.io/refferal-napcash/login.html";
   uid = user.uid;
-
   const userDoc = await db.collection("users").doc(uid).get();
   if(!userDoc.exists) return;
   userData = userDoc.data();
-  withdrawnRefs = userData.withdrawnRefs || [];
 
   userEmail.textContent = userData.fullName || userData.email;
   statusText.textContent = userData.status || "pending";
@@ -143,77 +137,37 @@ auth.onAuthStateChanged(async user => {
   refLinkInput.value = referralLink;
   copyBtn.onclick = ()=>navigator.clipboard.writeText(referralLink).then(()=>alert("Referral link copied!"));
 
+  // Profile button
   profileBtn.onclick = () => {
     alert(`Profile Info:\n\nFull Name: ${userData.fullName}\nEmail: ${userData.email}\nStatus: ${userData.status}\nReferral Code: ${userData.referralCode}`);
   };
 
-  // Real-time referrals + earnings history
+  // Real-time listener for referred users
   db.collection("users").where("referredBy","==",userData.referralCode)
     .onSnapshot(snapshot => {
       const referralsList = document.getElementById("referralsList");
       referralsList.innerHTML="";
-      earningsList.innerHTML="";
-      const seen = new Set();
-      let eligibleRefs = [];
+      let activeCount = 0;
+      let seen = new Set();
 
       snapshot.forEach(doc=>{
         const d = doc.data();
-        if(seen.has(doc.id)) return;
+        if(seen.has(doc.id)) return; // prevent duplicates
         seen.add(doc.id);
 
-        // Referrals list
+        if(d.status==="active") activeCount++;
         const li = document.createElement("li");
-        li.innerHTML = `<span>${d.fullName || d.email}</span>
-          <span class="status-badge ${d.status}">${d.status.toUpperCase()}</span>`;
+        li.innerHTML = `<span>${d.fullName || d.email}</span><span class="status-badge ${d.status==="active"?"active":"inactive"}">${d.status.toUpperCase()}</span>`;
         referralsList.appendChild(li);
-
-        // Earnings history
-        if(d.status==="active"){
-          const eLi = document.createElement("li");
-          const credited = withdrawnRefs.includes(doc.id);
-          eLi.innerHTML = `<span>${d.fullName || d.email}</span>
-            <span class="status-badge ${credited ? "credited" : "pending"}">${credited ? "CREDITED" : "PENDING"}</span>`;
-          earningsList.appendChild(eLi);
-        }
-
-        if(d.status==="active" && !withdrawnRefs.includes(doc.id)){
-          eligibleRefs.push(doc.id);
-        }
       });
 
-      earningsSpan.textContent = eligibleRefs.length * 50;
+      // Lifetime earnings = all active referrals × 50
+      lifetimeEarningsSpan.textContent = activeCount * 50;
+
+      // Current balance = active referrals since last withdrawal × 50
+      const newEarnings = (activeCount - (userData.lastWithdrawCount || 0)) * 50;
+      earningsSpan.textContent = newEarnings > 0 ? newEarnings : 0;
     });
-
-  // Withdraw
-  withdrawBtn.onclick = async ()=>{
-    if(userData.status!=="active"){ alert("Activate account first."); return; }
-
-    const activeSnap = await db.collection("users")
-      .where("referredBy","==",userData.referralCode)
-      .where("status","==","active").get();
-
-    const eligibleRefs = [];
-    activeSnap.forEach(doc=>{
-      if(!withdrawnRefs.includes(doc.id)) eligibleRefs.push(doc.id);
-    });
-
-    if(eligibleRefs.length===0){ alert("No new earnings to withdraw!"); return; }
-    const amount = eligibleRefs.length * 50;
-
-    await db.collection("withdrawals").add({
-      userId: uid,
-      amount: amount,
-      status: "pending",
-      method: userData.paymentMethod || "Mpesa",
-      createdAt: firebase.firestore.FieldValue.serverTimestamp()
-    });
-
-    await db.collection("users").doc(uid).update({
-      withdrawnRefs: firebase.firestore.FieldValue.arrayUnion(...eligibleRefs)
-    });
-
-    alert(`Withdrawal of KSh ${amount} requested successfully!`);
-  };
 
   // Withdrawals history
   db.collection("withdrawals").where("userId","==",uid).orderBy("createdAt","desc").onSnapshot(snap=>{
@@ -231,6 +185,31 @@ auth.onAuthStateChanged(async user => {
       withdrawalsList.appendChild(li);
     });
   });
+
+  withdrawBtn.onclick = async ()=>{
+    if(userData.status!=="active"){ alert("Activate account first."); return; }
+    const activeRefSnap = await db.collection("users")
+      .where("referredBy","==",userData.referralCode)
+      .where("status","==","active").get();
+    const newEarnings = (activeRefSnap.size - (userData.lastWithdrawCount || 0)) * 50;
+    if(newEarnings<=0){ alert("No earnings to withdraw!"); return; }
+
+    await db.collection("withdrawals").add({
+      userId: uid,
+      amount: newEarnings,
+      status: "pending",
+      method: userData.paymentMethod || "Mpesa",
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    await db.collection("users").doc(uid).update({
+      lastWithdrawCount: activeRefSnap.size,
+      withdrawalRequested: true,
+      withdrawalRequestedAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    earningsSpan.textContent = 0;
+    alert("Withdrawal request sent!");
+  };
+
 });
 
 // Logout
