@@ -9,13 +9,14 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
   <style>
-    body { background:#000; color:#fff; margin:0; font-family: Arial, sans-serif; }
+    body { background:#000; color:#fff; margin:0; font-family:Arial, sans-serif; }
     .nav { display:flex; align-items:center; justify-content:space-between; padding:15px 20px; background:#111; position:relative; }
     .brand { font-size:1.5rem; color:orange; font-weight:bold; }
     .hamburger { display:none; font-size:2rem; cursor:pointer; color:orange; margin-right:10px; }
     .nav-links { display:flex; gap:10px; align-items:center; }
     .btn-orange { background:orange; border:none; color:black; font-weight:bold; padding:8px 12px; border-radius:6px; cursor:pointer; transition:0.3s; }
-    .btn-orange:hover { background:#ff9900; color:#fff; }
+    .btn-orange:disabled { background:gray; cursor:not-allowed; }
+    .btn-orange:hover:enabled { background:#ff9900; color:#fff; }
     .hero { max-width:1000px; margin:20px auto; padding:20px; }
     .card { background:#111; padding:25px; border-radius:12px; box-shadow:0 5px 20px rgba(0,0,0,0.5); }
     .dashboard-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:20px; margin-top:20px; }
@@ -50,6 +51,7 @@
   <div class="brand">NapCash</div>
   <div class="nav-links" id="navLinks">
     <button id="profileBtn" class="btn-orange">Profile</button>
+    <button id="referralBtn" class="btn-orange">Referrals</button>
     <span id="userEmail"></span>
     <button id="logoutBtn" class="btn-orange">Logout</button>
   </div>
@@ -71,7 +73,7 @@
       <div class="info-card">
         <h3>Your Earnings</h3>
         <p>KSh <span id="earnings">0</span></p>
-        <button id="withdrawBtn" class="btn-orange" style="margin-top:10px;">Withdraw</button>
+        <button id="withdrawBtn" class="btn-orange">Withdraw</button>
       </div>
       <div class="info-card">
         <h3>Referral Link</h3>
@@ -124,40 +126,10 @@ const repoPath = "/refferal-napcash";
 const whatsappNumber = "+254718439373";
 
 // Elements
-const hamburger = document.getElementById("hamburger");
-const navLinks = document.getElementById("navLinks");
-const userEmailSpan = document.getElementById("userEmail");
-const statusSpan = document.getElementById("status");
-const refCodeSpan = document.getElementById("refCode");
-const earningsSpan = document.getElementById("earnings");
-const refLinkInput = document.getElementById("refLink");
-const referralsList = document.getElementById("referralsList");
-const withdrawalsList = document.getElementById("withdrawalsList");
-const logoutBtn = document.getElementById("logoutBtn");
-const copyBtn = document.getElementById("copyBtn");
-const activateBtn = document.getElementById("activateBtn");
 const withdrawBtn = document.getElementById("withdrawBtn");
-const profileBtn = document.getElementById("profileBtn");
-const profileModal = document.getElementById("profileModal");
-const closeModal = document.getElementById("closeModal");
-const modalName = document.getElementById("modalName");
-const modalEmail = document.getElementById("modalEmail");
-const modalPhone = document.getElementById("modalPhone");
-const saveProfileBtn = document.getElementById("saveProfileBtn");
-
-// Hamburger
-hamburger.onclick = () => {
-  navLinks.style.display = navLinks.style.display === "flex" ? "none" : "flex";
-};
-navLinks.querySelectorAll("button").forEach(btn => {
-  btn.onclick = () => { if(window.innerWidth<=768) navLinks.style.display="none"; };
-});
-
-// WhatsApp Activation
-function openWhatsApp(fullName){
-  const message = encodeURIComponent(`Hi Admin, I want to activate my account. My name is ${fullName}`);
-  window.open(`https://wa.me/${whatsappNumber.replace(/\D/g,'')}?text=${message}`,"_blank");
-}
+const earningsSpan = document.getElementById("earnings");
+const withdrawalsList = document.getElementById("withdrawalsList");
+const referralsList = document.getElementById("referralsList");
 
 // Auth
 auth.onAuthStateChanged(async user => {
@@ -166,125 +138,62 @@ auth.onAuthStateChanged(async user => {
   const userDoc = await db.collection("users").doc(uid).get();
   if(!userDoc.exists) return;
   const data = userDoc.data();
-  const fullName = data.fullName || data.name || "User";
 
-  userEmailSpan.textContent = data.email;
-  statusSpan.textContent = data.status;
-  refCodeSpan.textContent = data.referralCode;
-
-  // Referral link
-  const referralLink = `${window.location.origin}${repoPath}/register.html?ref=${data.referralCode}`;
-  refLinkInput.value = referralLink;
-  copyBtn.onclick = ()=>navigator.clipboard.writeText(referralLink).then(()=>alert("Referral link copied!")).catch(()=>alert("Failed to copy"));
-
-  // Referred accounts
-  const refSnap = await db.collection("users").where("referredBy","==",data.referralCode).get();
-  referralsList.innerHTML="";
-  if(!refSnap.empty){
-    refSnap.docs.forEach(doc=>{
-      const d = doc.data();
-      const li=document.createElement("li");
-      li.innerHTML = `
-        <span>${d.fullName || d.name}</span>
-        <span class="status" style="background:${d.status==="active"?"green":"orange"}">${d.status.toUpperCase()}</span>`;
-      referralsList.appendChild(li);
-    });
-  } else { referralsList.innerHTML="<li>No referrals yet</li>"; }
-
-  // Earnings calculation
+  // Earnings calc
   const activeRefSnap = await db.collection("users")
                                 .where("referredBy","==",data.referralCode)
                                 .where("status","==","active")
                                 .get();
-  let totalEarnings = 0;
-  activeRefSnap.forEach(doc => totalEarnings += 50);
+  let totalEarnings = activeRefSnap.size * 50;
   earningsSpan.textContent = totalEarnings;
 
-  // Withdraw button
-  withdrawBtn.onclick = async () => {
-    if(totalEarnings <= 0){ alert("You have no earnings to withdraw!"); return; }
-    if(totalEarnings >= 50 && !localStorage.getItem("withdrawConfirmed")){
-      const confirmWithdraw = confirm(`You have KSh ${totalEarnings}. Do you want to withdraw?`);
-      if(!confirmWithdraw) return;
-      localStorage.setItem("withdrawConfirmed","true");
-    }
-    await db.collection("withdrawals").add({
-      userId: uid,
-      amount: totalEarnings,
-      status: "pending",
-      method: data.paymentMethod || "Mpesa",
-      createdAt: firebase.firestore.FieldValue.serverTimestamp()
-    });
-    await db.collection("users").doc(uid).update({ earnings: 0 });
-    earningsSpan.textContent = 0;
-    alert("Withdrawal request sent! Admin will process it shortly.");
-  };
-
-  // Activate button
-  if(data.status !== "active"){
-    activateBtn.style.display = "inline-block";
-    activateBtn.onclick = () => openWhatsApp(fullName);
-  } else { activateBtn.style.display = "none"; }
-
-  // Profile modal
-  profileBtn.onclick = () => {
-    modalName.value = data.fullName || data.name || "";
-    modalEmail.value = data.email || "";
-    modalPhone.value = data.phone || "";
-    profileModal.style.display = "flex";
-  };
-
-  // Withdrawals history
+  // Watch withdrawals
   db.collection("withdrawals")
-    .where("userId", "==", uid)
-    .orderBy("createdAt", "desc")
-    .onSnapshot(snapshot => {
-      withdrawalsList.innerHTML = "";
-      if(snapshot.empty){
-        withdrawalsList.innerHTML = "<li>No withdrawals yet</li>";
-      } else {
-        snapshot.forEach(doc=>{
-          const d = doc.data();
-          const createdAt = d.createdAt?.toDate 
-            ? d.createdAt.toDate().toLocaleString() 
-            : "N/A";
-          const li=document.createElement("li");
-          li.innerHTML = `
-            <div style="flex:1;text-align:left;">
-              <strong>KSh ${d.amount || 0}</strong><br>
-              <small>${createdAt} | ${d.method || "Mpesa"}</small>
-            </div>
-            <span class="status" style="background:${
-              d.status==="paid"?"green": d.status==="pending"?"orange":"red"
-            }">${d.status.toUpperCase()}</span>`;
-          withdrawalsList.appendChild(li);
-        });
-      }
+    .where("userId","==",uid)
+    .orderBy("createdAt","desc")
+    .onSnapshot(snapshot=>{
+      withdrawalsList.innerHTML="";
+      let hasPending=false;
+      snapshot.forEach(doc=>{
+        const d=doc.data();
+        if(d.status==="pending") hasPending=true;
+        const createdAt=d.createdAt?.toDate?d.createdAt.toDate().toLocaleString():"N/A";
+        const li=document.createElement("li");
+        li.innerHTML=`
+          <div style="flex:1;text-align:left;">
+            <strong>KSh ${d.amount}</strong><br>
+            <small>${createdAt} | ${d.method||"Mpesa"}</small>
+          </div>
+          <span class="status" style="background:${d.status==="paid"?"green":"orange"}">${d.status.toUpperCase()}</span>`;
+        withdrawalsList.appendChild(li);
+      });
+      if(snapshot.empty) withdrawalsList.innerHTML="<li>No withdrawals yet</li>";
+
+      // Disable withdraw button if pending exists
+      if(hasPending) withdrawBtn.disabled=true;
+      else withdrawBtn.disabled=false;
     });
+
+  // Withdraw button logic
+  withdrawBtn.onclick=async()=>{
+    if(totalEarnings<=0){alert("You have no earnings to withdraw!");return;}
+    if(totalEarnings<50){alert("Minimum withdrawal is KSh 50!");return;}
+    if(!confirm("Are you sure you want to withdraw your earnings?")) return;
+
+    await db.collection("withdrawals").add({
+      userId:uid,
+      amount:totalEarnings,
+      status:"pending",
+      method:data.paymentMethod||"Mpesa",
+      createdAt:firebase.firestore.FieldValue.serverTimestamp()
+    });
+
+    await db.collection("users").doc(uid).update({ earnings:0 });
+    earningsSpan.textContent="0";
+    withdrawBtn.disabled=true;
+    alert("Withdrawal request sent!");
+  };
 });
-
-// Profile modal events
-closeModal.onclick = () => profileModal.style.display = "none";
-window.onclick = e => { if(e.target===profileModal) profileModal.style.display="none"; };
-saveProfileBtn.onclick = async () => {
-  const user = auth.currentUser;
-  if(!user) return;
-  const uid = user.uid;
-  await db.collection("users").doc(uid).update({
-    fullName: modalName.value,
-    email: modalEmail.value,
-    phone: modalPhone.value,
-    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-  });
-  alert("Profile updated!");
-  profileModal.style.display = "none";
-};
-
-// Logout
-logoutBtn.onclick = async () => {
-  await auth.signOut();
-  window.location.href = `${repoPath}/login.html`;
-};
 </script>
 </body>
 </html>
