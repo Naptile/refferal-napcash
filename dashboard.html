@@ -95,7 +95,6 @@ const auth = firebase.auth();
 const db = firebase.firestore();
 
 const withdrawBtn = document.getElementById("withdrawBtn");
-const withdrawStatus = document.getElementById("withdrawStatus");
 const earningsSpan = document.getElementById("earnings");
 const withdrawalsList = document.getElementById("withdrawalsList");
 const refCodeSpan = document.getElementById("refCode");
@@ -113,12 +112,15 @@ let uid = null;
 auth.onAuthStateChanged(async user => {
   if(!user) return window.location.href="https://naptile.github.io/refferal-napcash/login.html";
   uid = user.uid;
-  const userDoc = await db.collection("users").doc(uid).get();
+
+  const userRef = db.collection("users").doc(uid);
+  const userDoc = await userRef.get();
   if(!userDoc.exists) return;
   userData = userDoc.data();
 
   userEmail.textContent = userData.fullName || userData.email;
   statusText.textContent = userData.status || "pending";
+  earningsSpan.textContent = userData.earnings || 0;
 
   if(userData.status==="active") activateBtn.style.display="none";
 
@@ -140,21 +142,30 @@ auth.onAuthStateChanged(async user => {
 
   // Real-time listener for referred users
   db.collection("users").where("referredBy","==",userData.referralCode)
-    .onSnapshot(snapshot => {
+    .onSnapshot(async snapshot => {
       const referralsList = document.getElementById("referralsList");
       referralsList.innerHTML="";
-      let activeCount = 0;
-      snapshot.forEach(doc=>{
+      snapshot.forEach(async doc=>{
         const d = doc.data();
-        if(d.status==="active") activeCount++;
+
+        // If referral just turned active and not yet rewarded
+        if(d.status==="active" && !d.rewarded){
+          await db.collection("users").doc(uid).update({
+            earnings: firebase.firestore.FieldValue.increment(50)
+          });
+          await db.collection("users").doc(doc.id).update({
+            rewarded:true
+          });
+        }
+
         const li = document.createElement("li");
         li.innerHTML = `<span>${d.fullName || d.email}</span><span class="status-badge ${d.status}">${d.status.toUpperCase()}</span>`;
         referralsList.appendChild(li);
       });
 
-      // Update earnings dynamically
-      const newEarnings = (activeCount - (userData.lastWithdrawCount || 0)) * 50;
-      earningsSpan.textContent = newEarnings > 0 ? newEarnings : 0;
+      // Refresh earnings after updates
+      const updatedDoc = await userRef.get();
+      earningsSpan.textContent = updatedDoc.data().earnings || 0;
     });
 
   // Withdrawals history
@@ -176,21 +187,19 @@ auth.onAuthStateChanged(async user => {
 
   withdrawBtn.onclick = async ()=>{
     if(userData.status!=="active"){ alert("Activate account first."); return; }
-    const activeRefSnap = await db.collection("users")
-      .where("referredBy","==",userData.referralCode)
-      .where("status","==","active").get();
-    const newEarnings = (activeRefSnap.size - (userData.lastWithdrawCount || 0)) * 50;
-    if(newEarnings<=0){ alert("No earnings to withdraw!"); return; }
+    const userSnapshot = await userRef.get();
+    const currentEarnings = userSnapshot.data().earnings || 0;
+    if(currentEarnings<=0){ alert("No earnings to withdraw!"); return; }
 
     await db.collection("withdrawals").add({
       userId: uid,
-      amount: newEarnings,
+      amount: currentEarnings,
       status: "pending",
       method: userData.paymentMethod || "Mpesa",
       createdAt: firebase.firestore.FieldValue.serverTimestamp()
     });
-    await db.collection("users").doc(uid).update({
-      lastWithdrawCount: activeRefSnap.size,
+    await userRef.update({
+      earnings: 0,
       withdrawalRequested: true,
       withdrawalRequestedAt: firebase.firestore.FieldValue.serverTimestamp()
     });
@@ -208,4 +217,3 @@ logoutBtn.onclick = async ()=>{
 </script>
 </body>
 </html>
-
