@@ -21,11 +21,13 @@ body { background:#000; color:#fff; margin:0; font-family: Arial, sans-serif; }
 .info-card { background:#222; padding:20px; border-radius:10px; text-align:center; }
 .info-card h3 { color:orange; margin-bottom:8px; }
 input#refLink { width:100%; padding:5px; border:none; border-radius:5px; color:#000; margin-bottom:8px; }
-.referral-list, .withdrawal-list { list-style:none; padding-left:0; margin-top:10px; }
-.referral-list li, .withdrawal-list li { display:flex; justify-content:space-between; align-items:center; background:#222; padding:10px; border-radius:6px; margin-bottom:8px; }
+.referral-list, .withdrawal-list, .earnings-list { list-style:none; padding-left:0; margin-top:10px; }
+.referral-list li, .withdrawal-list li, .earnings-list li { display:flex; justify-content:space-between; align-items:center; background:#222; padding:10px; border-radius:6px; margin-bottom:8px; }
 .status-badge { font-size:0.8rem; padding:4px 8px; border-radius:4px; font-weight:bold; color:#fff; }
 .active { background:green; }
 .inactive { background:orange; }
+.credited { background:blue; }
+.pending { background:darkgoldenrod; }
 </style>
 </head>
 <body>
@@ -73,6 +75,13 @@ input#refLink { width:100%; padding:5px; border:none; border-radius:5px; color:#
     </div>
 
     <div style="margin-top:20px;">
+      <h3>Earnings History</h3>
+      <ul id="earningsList" class="earnings-list">
+        <li>Loading...</li>
+      </ul>
+    </div>
+
+    <div style="margin-top:20px;">
       <h3>Your Withdrawals</h3>
       <ul id="withdrawalsList" class="withdrawal-list">
         <li>Loading...</li>
@@ -94,7 +103,6 @@ firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.firestore();
 
-const withdrawBtn = document.getElementById("withdrawBtn");
 const earningsSpan = document.getElementById("earnings");
 const withdrawalsList = document.getElementById("withdrawalsList");
 const refCodeSpan = document.getElementById("refCode");
@@ -105,6 +113,7 @@ const activateBtn = document.getElementById("activateBtn");
 const userEmail = document.getElementById("userEmail");
 const logoutBtn = document.getElementById("logoutBtn");
 const profileBtn = document.getElementById("profileBtn");
+const earningsList = document.getElementById("earningsList");
 
 let userData = null;
 let uid = null;
@@ -138,11 +147,12 @@ auth.onAuthStateChanged(async user => {
     alert(`Profile Info:\n\nFull Name: ${userData.fullName}\nEmail: ${userData.email}\nStatus: ${userData.status}\nReferral Code: ${userData.referralCode}`);
   };
 
-  // Real-time referrals
+  // Real-time referrals + earnings history
   db.collection("users").where("referredBy","==",userData.referralCode)
     .onSnapshot(snapshot => {
       const referralsList = document.getElementById("referralsList");
       referralsList.innerHTML="";
+      earningsList.innerHTML="";
       const seen = new Set();
       let eligibleRefs = [];
 
@@ -151,17 +161,26 @@ auth.onAuthStateChanged(async user => {
         if(seen.has(doc.id)) return;
         seen.add(doc.id);
 
+        // Referrals list
         const li = document.createElement("li");
         li.innerHTML = `<span>${d.fullName || d.email}</span>
           <span class="status-badge ${d.status}">${d.status.toUpperCase()}</span>`;
         referralsList.appendChild(li);
+
+        // Earnings history
+        if(d.status==="active"){
+          const eLi = document.createElement("li");
+          const credited = withdrawnRefs.includes(doc.id);
+          eLi.innerHTML = `<span>${d.fullName || d.email}</span>
+            <span class="status-badge ${credited ? "credited" : "pending"}">${credited ? "CREDITED" : "PENDING"}</span>`;
+          earningsList.appendChild(eLi);
+        }
 
         if(d.status==="active" && !withdrawnRefs.includes(doc.id)){
           eligibleRefs.push(doc.id);
         }
       });
 
-      // Update earnings only from unpaid active referrals
       earningsSpan.textContent = eligibleRefs.length * 50;
     });
 
