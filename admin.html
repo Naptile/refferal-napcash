@@ -50,8 +50,9 @@
 
     <!-- Bulk Actions -->
     <div style="margin-bottom:15px;">
-      <button id="activateAllPendingBtn">Activate All Pending Referrals</button>
-      <button id="deactivateAllActiveBtn">Deactivate All Active Users</button>
+      <button id="markAllPaidBtn">Mark All Pending Withdrawals as Paid</button>
+      <button id="activateAllPendingBtn">Activate All Pending Users</button>
+      <button id="deactivateAllPendingBtn">Deactivate All Pending Users</button>
     </div>
 
     <!-- Users Table -->
@@ -129,10 +130,7 @@ document.getElementById("addMemberBtn").addEventListener("click", async () => {
   const referralCode = document.getElementById("newReferralCode").value.trim() || null;
   const referredBy = document.getElementById("newReferredBy").value.trim() || null;
 
-  if (!fullName || !email || !phone) {
-    alert("Please fill in Full Name, Email, and Phone Number.");
-    return;
-  }
+  if (!fullName || !email || !phone) return alert("Please fill in Full Name, Email, and Phone Number.");
 
   await db.collection("users").add({
     fullName,
@@ -163,7 +161,7 @@ async function loadUsers() {
 }
 
 function renderUsers(users) {
-  if (users.length === 0) {
+  if (!users.length) {
     usersTableBody.innerHTML = "<tr><td colspan='8'>No users found</td></tr>";
     return;
   }
@@ -171,7 +169,6 @@ function renderUsers(users) {
   usersTableBody.innerHTML = "";
   users.forEach(u => {
     const tr = document.createElement("tr");
-
     if (u.status === "pending") tr.classList.add("pending");
     if (u.status === "deactivated") tr.classList.add("deactivated");
 
@@ -212,27 +209,6 @@ async function deactivateUser(userId) {
   loadUsers();
 }
 
-// Bulk Activate/Deactivate
-document.getElementById("activateAllPendingBtn").addEventListener("click", async () => {
-  if (!confirm("Are you sure you want to activate all pending users?")) return;
-  const snapshot = await db.collection("users").where("status","==","pending").get();
-  const batch = db.batch();
-  snapshot.docs.forEach(doc => batch.update(doc.ref, { status: "active" }));
-  await batch.commit();
-  alert(`${snapshot.size} users activated!`);
-  loadUsers();
-});
-
-document.getElementById("deactivateAllActiveBtn").addEventListener("click", async () => {
-  if (!confirm("Are you sure you want to deactivate all active users?")) return;
-  const snapshot = await db.collection("users").where("status","==","active").get();
-  const batch = db.batch();
-  snapshot.docs.forEach(doc => batch.update(doc.ref, { status: "deactivated" }));
-  await batch.commit();
-  alert(`${snapshot.size} users deactivated!`);
-  loadUsers();
-});
-
 // Load Withdrawals
 async function loadWithdrawals() {
   const snapshot = await db.collection("withdrawals").orderBy("createdAt", "desc").get();
@@ -271,9 +247,43 @@ async function markPaid(withdrawalId) {
   loadWithdrawals();
 }
 
+// Bulk Actions
+document.getElementById("markAllPaidBtn").addEventListener("click", async () => {
+  if (!confirm("Mark all pending withdrawals as paid?")) return;
+  const snapshot = await db.collection("withdrawals").where("status", "==", "pending").get();
+  if (snapshot.empty) return alert("No pending withdrawals!");
+  const batch = db.batch();
+  snapshot.docs.forEach(doc => batch.update(doc.ref, { status: "paid" }));
+  await batch.commit();
+  alert(`${snapshot.size} withdrawals marked as Paid!`);
+  loadWithdrawals();
+});
+
+document.getElementById("activateAllPendingBtn").addEventListener("click", async () => {
+  if (!confirm("Activate all pending users?")) return;
+  const snapshot = await db.collection("users").where("status", "==", "pending").get();
+  if (snapshot.empty) return alert("No pending users!");
+  const batch = db.batch();
+  snapshot.docs.forEach(doc => batch.update(doc.ref, { status: "active" }));
+  await batch.commit();
+  alert(`${snapshot.size} users activated!`);
+  loadUsers();
+});
+
+document.getElementById("deactivateAllPendingBtn").addEventListener("click", async () => {
+  if (!confirm("Deactivate all pending users?")) return;
+  const snapshot = await db.collection("users").where("status", "==", "pending").get();
+  if (snapshot.empty) return alert("No pending users!");
+  const batch = db.batch();
+  snapshot.docs.forEach(doc => batch.update(doc.ref, { status: "deactivated" }));
+  await batch.commit();
+  alert(`${snapshot.size} users deactivated!`);
+  loadUsers();
+});
+
 // Export Users
 document.getElementById("exportBtn").addEventListener("click", () => {
-  if (allUsers.length === 0) { alert("No users to export!"); return; }
+  if (allUsers.length === 0) return alert("No users to export!");
   const headers = ["Full Name", "Email", "Phone", "Status", "Referral Code", "Earnings", "Referred By"];
   const rows = allUsers.map(u => [
     `"${u.fullName || "N/A"}"`,
@@ -293,7 +303,7 @@ document.getElementById("exportReferralsBtn").addEventListener("click", () => {
   const rows = allUsers
     .filter(u => u.referredBy && u.referredBy !== "None")
     .map(u => [`"${u.fullName || u.email}"`, `"${u.referredBy}"`]);
-  if (rows.length === 0) { alert("No referral data found!"); return; }
+  if (rows.length === 0) return alert("No referral data found!");
   const headers = ["User", "Referred By"];
   const csvContent = [headers.join(","), ...rows.map(r => r.join(","))].join("\n");
   downloadCSV(csvContent, "napcash_referrals.csv");
