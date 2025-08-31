@@ -1,42 +1,31 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>NapCash – Admin Dashboard</title>
-<link rel="stylesheet" href="styles/admin.css">
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-<style>
-  body { font-family: Arial, sans-serif; margin:0; padding:0; }
-  .nav { display:flex; justify-content:space-between; align-items:center; padding:15px 20px; background:#111; color:#fff; flex-wrap:wrap; }
-  .brand { font-size:1.5rem; font-weight:bold; color:orange; margin-bottom:5px; }
-  .nav button { padding:8px 12px; border:none; border-radius:5px; cursor:pointer; margin-top:5px; }
-  .hero { max-width:1200px; margin:20px auto; padding:15px; }
-  .card { background:#222; padding:20px; border-radius:10px; overflow-x:auto; }
-  .add-member-form input, .search-bar input, .search-bar select { margin:5px 0; padding:8px; width:100%; max-width:300px; border-radius:5px; border:1px solid #ccc; }
-  .add-member-form button, .search-bar button { margin:5px 5px 5px 0; padding:8px 12px; border-radius:5px; cursor:pointer; }
-  table.users-table { width:100%; border-collapse:collapse; margin-top:10px; min-width:600px; }
-  table.users-table th, table.users-table td { border:1px solid #444; padding:8px; text-align:left; color:#fff; }
-  table.users-table th { background:#333; }
-  @media(max-width:1024px){
-    .nav { flex-direction:column; align-items:flex-start; }
-    .add-member-form input, .search-bar input, .search-bar select { max-width:100%; }
-    .add-member-form button, .search-bar button { width:100%; max-width:none; }
-    table.users-table { min-width:0; display:block; overflow-x:auto; }
-    table.users-table thead, table.users-table tbody, table.users-table th, table.users-table td, table.users-table tr { display:table; width:100%; }
-  }
-  @media(max-width:768px){
-    table.users-table, table.users-table thead, table.users-table tbody, table.users-table th, table.users-table td, table.users-table tr { display:block; width:100%; }
-    table.users-table tr { margin-bottom:15px; border-bottom:1px solid #444; }
-    table.users-table td { padding-left:50%; text-align:right; border:none; position:relative; }
-    table.users-table td::before { position:absolute; left:10px; width:45%; text-align:left; font-weight:bold; content:attr(data-label); }
-    table.users-table th { display:none; }
-  }
-</style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NapCash – Admin Dashboard</title>
+  <link rel="stylesheet" href="styles/admin.css">
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+  <style>
+    body, html { margin:0; padding:0; font-family: Arial, sans-serif; background:#000; color:#fff; }
+    .nav { display:flex; justify-content:space-between; align-items:center; padding:15px 20px; background:#111; flex-wrap: wrap; }
+    .brand { font-size:1.5rem; color:orange; font-weight:bold; margin-bottom:10px; }
+    .hero { max-width:1200px; margin:20px auto; padding:20px; }
+    .card { background:#111; padding:25px; border-radius:12px; overflow-x:auto; }
+    input, select, button { margin:5px 0; padding:8px; border-radius:5px; border:none; }
+    table { width:100%; border-collapse:collapse; min-width:600px; }
+    th, td { padding:10px; text-align:left; border-bottom:1px solid #333; }
+    th { background:#222; color:orange; position:sticky; top:0; }
+    .users-table td button { margin-right:5px; }
+    @media(max-width:768px) {
+      .nav { flex-direction:column; align-items:flex-start; }
+      .brand { margin-bottom:10px; }
+    }
+  </style>
 </head>
-<body class="bg">
+<body>
 
 <div class="nav">
   <div class="brand">NapCash Admin</div>
@@ -49,7 +38,6 @@
   <div class="card">
     <h2>Admin Dashboard</h2>
 
-    <!-- Add Member Form -->
     <div class="add-member-form">
       <h3>Add New Member</h3>
       <input type="text" id="newFullName" placeholder="Full Name" required>
@@ -60,8 +48,7 @@
       <button id="addMemberBtn">Add Member</button>
     </div>
 
-    <!-- Search and Filter -->
-    <div class="search-bar" style="margin-top:20px;">
+    <div class="search-bar">
       <input type="text" id="searchInput" placeholder="Search by name, email, phone, or referral code...">
       <select id="statusFilter">
         <option value="">All Status</option>
@@ -75,49 +62,50 @@
       <button id="exportReferralsBtn">Export Referrals Only</button>
     </div>
 
-    <!-- Users Table -->
     <h3>All Users</h3>
-    <table class="users-table">
-      <thead>
-        <tr>
-          <th>Full Name</th>
-          <th>Email</th>
-          <th>Phone</th>
-          <th>Status</th>
-          <th>Referral Code</th>
-          <th>Earnings (KSh)</th>
-          <th>Referred By</th>
-          <th>Action</th>
-        </tr>
-      </thead>
-      <tbody id="usersTableBody">
-        <tr><td colspan="8">Loading users...</td></tr>
-      </tbody>
-    </table>
+    <div style="overflow-x:auto;">
+      <table class="users-table">
+        <thead>
+          <tr>
+            <th>Full Name</th>
+            <th>Email</th>
+            <th>Phone</th>
+            <th>Status</th>
+            <th>Referral Code</th>
+            <th>Earnings (KSh)</th>
+            <th>Referred By</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody id="usersTableBody">
+          <tr><td colspan="8">Loading users...</td></tr>
+        </tbody>
+      </table>
+    </div>
 
-    <!-- Withdrawals Table -->
     <h3 style="margin-top:40px;">Withdrawal Requests</h3>
-    <table class="users-table">
-      <thead>
-        <tr>
-          <th>User</th>
-          <th>Email</th>
-          <th>Amount (KSh)</th>
-          <th>Status</th>
-          <th>Date</th>
-          <th>Action</th>
-        </tr>
-      </thead>
-      <tbody id="withdrawalsTableBody">
-        <tr><td colspan="6">Loading withdrawals...</td></tr>
-      </tbody>
-    </table>
+    <div style="overflow-x:auto;">
+      <table class="users-table">
+        <thead>
+          <tr>
+            <th>User</th>
+            <th>Email</th>
+            <th>Amount (KSh)</th>
+            <th>Status</th>
+            <th>Date</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody id="withdrawalsTableBody">
+          <tr><td colspan="6">Loading withdrawals...</td></tr>
+        </tbody>
+      </table>
+    </div>
 
   </div>
 </div>
 
 <script>
-// Firebase initialization
 const firebaseConfig = {
   apiKey: "AIzaSyDybgITS1zttYLSa1_vsV0vYLzqbr42abA",
   authDomain: "napcash-3e696.firebaseapp.com",
@@ -130,21 +118,16 @@ firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.firestore();
 
-// Elements
 const usersTableBody = document.getElementById("usersTableBody");
 const withdrawalsTableBody = document.getElementById("withdrawalsTableBody");
 const logoutBtn = document.getElementById("logoutBtn");
-const searchInput = document.getElementById("searchInput");
-const statusFilter = document.getElementById("statusFilter");
-const searchBtn = document.getElementById("searchBtn");
-const resetBtn = document.getElementById("resetBtn");
 
 let allUsers = [];
 
 auth.onAuthStateChanged(async user => {
   if (!user) return window.location.href = "login.html";
-  await loadUsers();
-  await loadWithdrawals();
+  loadUsers();
+  loadWithdrawals();
 });
 
 // Add Member
@@ -155,7 +138,7 @@ document.getElementById("addMemberBtn").addEventListener("click", async () => {
   const referralCode = document.getElementById("newReferralCode").value.trim() || null;
   const referredBy = document.getElementById("newReferredBy").value.trim() || null;
 
-  if (!fullName || !email || !phone) return alert("Please fill in Full Name, Email, and Phone Number.");
+  if (!fullName || !email || !phone) { alert("Please fill in Full Name, Email, and Phone Number."); return; }
 
   await db.collection("users").add({
     fullName, email, phone, referralCode, referredBy,
@@ -164,12 +147,8 @@ document.getElementById("addMemberBtn").addEventListener("click", async () => {
   });
 
   alert("New member added successfully!");
-  document.getElementById("newFullName").value = "";
-  document.getElementById("newEmail").value = "";
-  document.getElementById("newPhone").value = "";
-  document.getElementById("newReferralCode").value = "";
-  document.getElementById("newReferredBy").value = "";
-  await loadUsers();
+  ["newFullName","newEmail","newPhone","newReferralCode","newReferredBy"].forEach(id => document.getElementById(id).value = "");
+  loadUsers();
 });
 
 // Load Users
@@ -179,6 +158,7 @@ async function loadUsers() {
   renderUsers(allUsers);
 }
 
+// Render Users Table
 function renderUsers(users) {
   if (users.length === 0) {
     usersTableBody.innerHTML = "<tr><td colspan='8'>No users found</td></tr>";
@@ -187,67 +167,86 @@ function renderUsers(users) {
   usersTableBody.innerHTML = "";
   users.forEach(u => {
     const tr = document.createElement("tr");
+    if(u.status === "pending") tr.classList.add("pending");
+    if(u.status === "deactivated") tr.classList.add("deactivated");
+
+    let actionButtons = "";
+    if(u.status === "pending"){ actionButtons += `<button onclick="activateUser('${u.id}')">Activate</button>`; actionButtons += `<button onclick="deactivateUser('${u.id}')">Deactivate</button>`; }
+    else if(u.status === "active") actionButtons += `<button onclick="deactivateUser('${u.id}')">Deactivate</button>`;
+    else if(u.status === "deactivated") actionButtons += `<button onclick="activateUser('${u.id}')">Activate</button>`;
+
     tr.innerHTML = `
-      <td data-label="Full Name">${u.fullName || "N/A"}</td>
-      <td data-label="Email">${u.email || "N/A"}</td>
-      <td data-label="Phone">${u.phone || "N/A"}</td>
-      <td data-label="Status">${u.status || "pending"}</td>
-      <td data-label="Referral Code">${u.referralCode || "N/A"}</td>
-      <td data-label="Earnings">${u.earnings || 0}</td>
-      <td data-label="Referred By">${u.referredBy || "None"}</td>
-      <td data-label="Action">
-        ${u.status==="pending"?`<button onclick="activateUser('${u.id}')">Activate</button><button onclick="deactivateUser('${u.id}')">Deactivate</button>`:
-          u.status==="active"?`<button onclick="deactivateUser('${u.id}')">Deactivate</button>`:
-          `<button onclick="activateUser('${u.id}')">Activate</button>`}
-      </td>
+      <td>${u.fullName || "N/A"}</td>
+      <td>${u.email || "N/A"}</td>
+      <td>${u.phone || "N/A"}</td>
+      <td>${u.status || "pending"}</td>
+      <td>${u.referralCode || "N/A"}</td>
+      <td>${u.earnings || 0}</td>
+      <td>${u.referredBy || "None"}</td>
+      <td>${actionButtons}</td>
     `;
     usersTableBody.appendChild(tr);
   });
 }
 
-// Activate/Deactivate
+// Activate/Deactivate functions
 async function activateUser(userId) { await db.collection("users").doc(userId).update({ status: "active" }); alert("User activated!"); loadUsers(); }
 async function deactivateUser(userId) { await db.collection("users").doc(userId).update({ status: "deactivated" }); alert("User deactivated!"); loadUsers(); }
 
 // Load Withdrawals
 async function loadWithdrawals() {
-  const snapshot = await db.collection("withdrawals").orderBy("createdAt", "desc").get();
-  if (snapshot.empty) { withdrawalsTableBody.innerHTML = "<tr><td colspan='6'>No withdrawals yet</td></tr>"; return; }
-  withdrawalsTableBody.innerHTML = "";
-  for (const doc of snapshot.docs) {
+  const snapshot = await db.collection("withdrawals").orderBy("createdAt","desc").get();
+  if(snapshot.empty){ withdrawalsTableBody.innerHTML="<tr><td colspan='6'>No withdrawals yet</td></tr>"; return; }
+
+  withdrawalsTableBody.innerHTML="";
+  for(const doc of snapshot.docs){
     const w = doc.data();
     const user = await db.collection("users").doc(w.userId).get();
     const userData = user.exists ? user.data() : {};
-    const date = w.createdAt ? w.createdAt.toDate().toLocaleString() : "Unknown";
     const tr = document.createElement("tr");
+    const date = w.createdAt ? w.createdAt.toDate().toLocaleString() : "Unknown";
     tr.innerHTML = `
-      <td data-label="User">${userData.fullName || "Unknown"}</td>
-      <td data-label="Email">${userData.email || "Unknown"}</td>
-      <td data-label="Amount">${w.amount}</td>
-      <td data-label="Status">${w.status}</td>
-      <td data-label="Date">${date}</td>
-      <td data-label="Action">${w.status==="pending"?`<button onclick="markPaid('${doc.id}')">Mark Paid</button>`:"—"}</td>
+      <td>${userData.fullName || "Unknown"}</td>
+      <td>${userData.email || "Unknown"}</td>
+      <td>${w.amount}</td>
+      <td>${w.status}</td>
+      <td>${date}</td>
+      <td>${w.status==="pending" ? `<button onclick="markPaid('${doc.id}')">Mark Paid</button>`:"—"}</td>
     `;
     withdrawalsTableBody.appendChild(tr);
   }
 }
 
-// Mark Paid
+// Mark Withdrawal as Paid
 async function markPaid(withdrawalId) { await db.collection("withdrawals").doc(withdrawalId).update({ status: "paid" }); alert("Withdrawal marked as Paid."); loadWithdrawals(); }
 
-// Search & Filter
-searchBtn.addEventListener("click", () => {
-  const query = searchInput.value.trim().toLowerCase();
-  const status = statusFilter.value;
-  const filtered = allUsers.filter(u => {
-    const matchesQuery = u.fullName?.toLowerCase().includes(query) || u.email?.toLowerCase().includes(query) || u.phone?.toLowerCase().includes(query) || u.referralCode?.toLowerCase().includes(query);
-    const matchesStatus = status === "" || u.status === status;
-    return matchesQuery && matchesStatus;
-  });
-  renderUsers(filtered);
+// Export Users
+document.getElementById("exportBtn").addEventListener("click", () => {
+  if(allUsers.length === 0){ alert("No users to export!"); return; }
+  const headers = ["Full Name","Email","Phone","Status","Referral Code","Earnings","Referred By"];
+  const rows = allUsers.map(u => [`"${u.fullName||'N/A'}"`,`"${u.email||'N/A'}"`,`"${u.phone||'N/A'}"`,`"${u.status||'pending'}"`,`"${u.referralCode||'N/A'}"`,`"${u.earnings||0}"`,`"${u.referredBy||'None'}"`]);
+  const csvContent = [headers.join(","), ...rows.map(r=>r.join(","))].join("\n");
+  downloadCSV(csvContent, "napcash_users.csv");
 });
 
-resetBtn.addEventListener("click", () => { searchInput.value=""; statusFilter.value=""; renderUsers(allUsers); });
+// Export Referrals Only
+document.getElementById("exportReferralsBtn").addEventListener("click", () => {
+  const rows = allUsers.filter(u => u.referredBy && u.referredBy!=="None").map(u => [`"${u.fullName||u.email}"`,`"${u.referredBy}"`]);
+  if(rows.length===0){ alert("No referral data found!"); return; }
+  const headers = ["User","Referred By"];
+  const csvContent = [headers.join(","), ...rows.map(r=>r.join(","))].join("\n");
+  downloadCSV(csvContent, "napcash_referrals.csv");
+});
+
+// CSV Download Utility
+function downloadCSV(csvContent, filename){
+  const blob = new Blob([csvContent],{type:"text/csv;charset=utf-8;"});
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+}
 
 // Logout
 logoutBtn.onclick = async () => { await auth.signOut(); window.location.href="login.html"; };
