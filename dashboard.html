@@ -10,9 +10,8 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <style>
 body { background:#000; color:#fff; margin:0; font-family: Arial, sans-serif; }
-.nav { display:flex; align-items:center; justify-content:space-between; padding:15px 20px; background:#111; flex-wrap:wrap; }
+.nav { display:flex; align-items:center; justify-content:space-between; padding:15px 20px; background:#111; }
 .brand { font-size:1.5rem; color:orange; font-weight:bold; }
-.nav-links { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
 .btn-orange { background:orange; border:none; color:black; font-weight:bold; padding:8px 12px; border-radius:6px; cursor:pointer; transition:0.3s; }
 .btn-orange:disabled { background:gray; color:#ddd; cursor:not-allowed; }
 .btn-orange:hover:enabled { background:#ff9900; color:#fff; }
@@ -23,7 +22,7 @@ body { background:#000; color:#fff; margin:0; font-family: Arial, sans-serif; }
 .info-card h3 { color:orange; margin-bottom:8px; }
 input#refLink { width:100%; padding:5px; border:none; border-radius:5px; color:#000; margin-bottom:8px; }
 .referral-list, .withdrawal-list { list-style:none; padding-left:0; margin-top:10px; }
-.referral-list li, .withdrawal-list li { display:flex; justify-content:space-between; align-items:center; background:#222; padding:10px; border-radius:6px; margin-bottom:8px; flex-wrap:wrap; }
+.referral-list li, .withdrawal-list li { display:flex; justify-content:space-between; align-items:center; background:#222; padding:10px; border-radius:6px; margin-bottom:8px; }
 .status-badge { font-size:0.8rem; padding:4px 8px; border-radius:4px; font-weight:bold; color:#fff; }
 .active { background:green; }
 .inactive { background:orange; }
@@ -106,6 +105,7 @@ const statusText = document.getElementById("status");
 const activateBtn = document.getElementById("activateBtn");
 const userEmail = document.getElementById("userEmail");
 const logoutBtn = document.getElementById("logoutBtn");
+const profileBtn = document.getElementById("profileBtn");
 
 let userData = null;
 let uid = null;
@@ -133,13 +133,17 @@ auth.onAuthStateChanged(async user => {
   refLinkInput.value = referralLink;
   copyBtn.onclick = ()=>navigator.clipboard.writeText(referralLink).then(()=>alert("Referral link copied!"));
 
-  // --- Real-time listener for referred users ---
+  // Profile button
+  profileBtn.onclick = () => {
+    alert(`Profile Info:\n\nFull Name: ${userData.fullName}\nEmail: ${userData.email}\nStatus: ${userData.status}\nReferral Code: ${userData.referralCode}`);
+  };
+
+  // Real-time listener for referred users
   db.collection("users").where("referredBy","==",userData.referralCode)
     .onSnapshot(snapshot => {
       const referralsList = document.getElementById("referralsList");
       referralsList.innerHTML="";
       let activeCount = 0;
-      if(snapshot.empty){ referralsList.innerHTML="<li>No referrals yet</li>"; }
       snapshot.forEach(doc=>{
         const d = doc.data();
         if(d.status==="active") activeCount++;
@@ -153,38 +157,30 @@ auth.onAuthStateChanged(async user => {
       earningsSpan.textContent = newEarnings > 0 ? newEarnings : 0;
     });
 
-  // --- Real-time listener for withdrawals ---
-  db.collection("withdrawals").where("userId","==",uid)
-    .orderBy("createdAt","desc")
-    .onSnapshot(snap=>{
-      withdrawalsList.innerHTML="";
-      let lastStatus = null;
-      if(snap.empty){ withdrawalsList.innerHTML="<li>No withdrawals yet</li>"; } 
-      snap.forEach((doc,i)=>{
-        const d = doc.data();
-        const createdAt = d.createdAt?.toDate ? d.createdAt.toDate().toLocaleString() : "N/A";
-        const li = document.createElement("li");
-        li.innerHTML = `<div style="flex:1;text-align:left;">
-          <strong>KSh ${d.amount}</strong><br>
-          <small>${createdAt} | ${d.method || "Mpesa"}</small>
-        </div>
-        <span class="status-badge ${d.status==="paid"?"active":"inactive"}">${d.status.toUpperCase()}</span>`;
-        withdrawalsList.appendChild(li);
-        if(i===0) lastStatus = d.status;
-      });
-      withdrawStatus.textContent = lastStatus ? `Last withdrawal: ${lastStatus.toUpperCase()}` : "";
+  // Withdrawals history
+  db.collection("withdrawals").where("userId","==",uid).orderBy("createdAt","desc").onSnapshot(snap=>{
+    withdrawalsList.innerHTML="";
+    if(snap.empty){ withdrawalsList.innerHTML="<li>No withdrawals yet</li>"; return; }
+    snap.forEach(doc=>{
+      const d = doc.data();
+      const createdAt = d.createdAt?.toDate ? d.createdAt.toDate().toLocaleString() : "N/A";
+      const li = document.createElement("li");
+      li.innerHTML = `<div style="flex:1;text-align:left;">
+        <strong>KSh ${d.amount}</strong><br>
+        <small>${createdAt} | ${d.method || "Mpesa"}</small>
+      </div>
+      <span class="status-badge ${d.status==="paid"?"active":"inactive"}">${d.status.toUpperCase()}</span>`;
+      withdrawalsList.appendChild(li);
     });
+  });
 
-  // Withdraw button
   withdrawBtn.onclick = async ()=>{
     if(userData.status!=="active"){ alert("Activate account first."); return; }
-
     const activeRefSnap = await db.collection("users")
       .where("referredBy","==",userData.referralCode)
-      .where("status","==","active")
-      .get();
+      .where("status","==","active").get();
     const newEarnings = (activeRefSnap.size - (userData.lastWithdrawCount || 0)) * 50;
-    if(newEarnings <= 0){ alert("No earnings to withdraw!"); return; }
+    if(newEarnings<=0){ alert("No earnings to withdraw!"); return; }
 
     await db.collection("withdrawals").add({
       userId: uid,
@@ -194,18 +190,17 @@ auth.onAuthStateChanged(async user => {
       createdAt: firebase.firestore.FieldValue.serverTimestamp()
     });
     await db.collection("users").doc(uid).update({
-      earnings: 0,
       lastWithdrawCount: activeRefSnap.size,
       withdrawalRequested: true,
       withdrawalRequestedAt: firebase.firestore.FieldValue.serverTimestamp()
     });
     earningsSpan.textContent = 0;
-    withdrawStatus.textContent = "Last withdrawal: PENDING";
     alert("Withdrawal request sent!");
   };
+
 });
 
-// Fixed Logout
+// Logout
 logoutBtn.onclick = async ()=>{
   await auth.signOut();
   window.location.href="https://naptile.github.io/refferal-napcash/login.html";
