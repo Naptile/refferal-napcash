@@ -1,32 +1,32 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>NapCash – Dashboard</title>
-  <link rel="stylesheet" href="styles/dash2.css">
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-  <style>
-    body { background:#000; color:#fff; margin:0; font-family: Arial, sans-serif; }
-    .nav { display:flex; align-items:center; justify-content:space-between; padding:15px 20px; background:#111; }
-    .brand { font-size:1.5rem; color:orange; font-weight:bold; }
-    .btn-orange { background:orange; border:none; color:black; font-weight:bold; padding:8px 12px; border-radius:6px; cursor:pointer; transition:0.3s; }
-    .btn-orange:disabled { background:gray; color:#ddd; cursor:not-allowed; }
-    .btn-orange:hover:enabled { background:#ff9900; color:#fff; }
-    .hero { max-width:1000px; margin:20px auto; padding:20px; }
-    .card { background:#111; padding:25px; border-radius:12px; }
-    .dashboard-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:20px; margin-top:20px; }
-    .info-card { background:#222; padding:20px; border-radius:10px; text-align:center; }
-    .info-card h3 { color:orange; margin-bottom:8px; }
-    input#refLink { width:100%; padding:5px; border:none; border-radius:5px; color:#000; margin-bottom:8px; }
-    .referral-list, .withdrawal-list { list-style:none; padding-left:0; margin-top:10px; }
-    .referral-list li, .withdrawal-list li { display:flex; justify-content:space-between; align-items:center; background:#222; padding:10px; border-radius:6px; margin-bottom:8px; }
-    .status-badge { font-size:0.8rem; padding:4px 8px; border-radius:4px; font-weight:bold; color:#fff; }
-    .active { background:green; }
-    .inactive { background:orange; }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NapCash – Dashboard</title>
+<link rel="stylesheet" href="styles/dash2.css">
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<style>
+body { background:#000; color:#fff; margin:0; font-family: Arial, sans-serif; }
+.nav { display:flex; align-items:center; justify-content:space-between; padding:15px 20px; background:#111; }
+.brand { font-size:1.5rem; color:orange; font-weight:bold; }
+.btn-orange { background:orange; border:none; color:black; font-weight:bold; padding:8px 12px; border-radius:6px; cursor:pointer; transition:0.3s; }
+.btn-orange:disabled { background:gray; color:#ddd; cursor:not-allowed; }
+.btn-orange:hover:enabled { background:#ff9900; color:#fff; }
+.hero { max-width:1000px; margin:20px auto; padding:20px; }
+.card { background:#111; padding:25px; border-radius:12px; }
+.dashboard-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:20px; margin-top:20px; }
+.info-card { background:#222; padding:20px; border-radius:10px; text-align:center; }
+.info-card h3 { color:orange; margin-bottom:8px; }
+input#refLink { width:100%; padding:5px; border:none; border-radius:5px; color:#000; margin-bottom:8px; }
+.referral-list, .withdrawal-list { list-style:none; padding-left:0; margin-top:10px; }
+.referral-list li, .withdrawal-list li { display:flex; justify-content:space-between; align-items:center; background:#222; padding:10px; border-radius:6px; margin-bottom:8px; }
+.status-badge { font-size:0.8rem; padding:4px 8px; border-radius:4px; font-weight:bold; color:#fff; }
+.active { background:green; }
+.inactive { background:orange; }
+</style>
 </head>
 <body>
 
@@ -105,30 +105,26 @@ const statusText = document.getElementById("status");
 const activateBtn = document.getElementById("activateBtn");
 
 let userData = null;
-let earningsNow = 0;
-let activeReferrals = 0;
+let uid = null;
 
-// Auth listener
 auth.onAuthStateChanged(async user => {
-  if (!user) return window.location.href="/login.html";
-  const uid = user.uid;
+  if(!user) return window.location.href="/login.html";
+  uid = user.uid;
   const userDoc = await db.collection("users").doc(uid).get();
-  if (!userDoc.exists) return;
+  if(!userDoc.exists) return;
   userData = userDoc.data();
 
-  // Show status
-  statusText.textContent = userData.status || "inactive";
+  userEmail.textContent = userData.email;
+  statusText.textContent = userData.status || "pending";
 
   // Hide activate button if active
-  if(userData.status === "active"){
-    activateBtn.style.display = "none";
-  } else {
-    activateBtn.onclick = () => {
-      const msg = `Hi Admin, I want to activate my account. My name is ${userData.fullName || ""}`;
-      const url = `https://wa.me/254718439373?text=${encodeURIComponent(msg)}`;
-      window.open(url, "_blank");
-    };
-  }
+  if(userData.status==="active") activateBtn.style.display="none";
+
+  activateBtn.onclick = ()=>{
+    const msg = `Hi Admin, I want to activate my account. My name is ${userData.fullName}`;
+    const url = `https://wa.me/254718439373?text=${encodeURIComponent(msg)}`;
+    window.open(url,"_blank");
+  };
 
   // Referral code & link
   refCodeSpan.textContent = userData.referralCode;
@@ -144,89 +140,77 @@ auth.onAuthStateChanged(async user => {
   refSnap.forEach(doc=>{
     const d = doc.data();
     const li = document.createElement("li");
-    li.innerHTML = `
-      <span>${d.fullName || d.email}</span>
-      <span class="status-badge ${d.status}">${d.status.toUpperCase()}</span>
-    `;
+    li.innerHTML = `<span>${d.fullName || d.email}</span><span class="status-badge ${d.status}">${d.status.toUpperCase()}</span>`;
     referralsList.appendChild(li);
   });
 
-  // Earnings calculation using lastWithdrawCount
+  // Earnings = 50 per active referral since last withdrawal
   const activeRefSnap = await db.collection("users")
     .where("referredBy","==",userData.referralCode)
     .where("status","==","active")
     .get();
 
-  activeReferrals = activeRefSnap.size;
-  const lastWithdrawCount = userData.lastWithdrawCount || 0;
-  earningsNow = (activeReferrals - lastWithdrawCount) * 50;
-  earningsSpan.textContent = earningsNow;
+  const newEarnings = (activeRefSnap.size - (userData.lastWithdrawCount || 0)) * 50;
+  earningsSpan.textContent = newEarnings > 0 ? newEarnings : 0;
 
   // Withdrawals history
   db.collection("withdrawals").where("userId","==",uid).orderBy("createdAt","desc").onSnapshot(snap=>{
     withdrawalsList.innerHTML="";
-    if(snap.empty){ 
-      withdrawalsList.innerHTML="<li>No withdrawals yet</li>"; 
-      updateWithdrawBtn(earningsNow, null, userData.status);
-      return; 
-    }
+    if(snap.empty){ withdrawalsList.innerHTML="<li>No withdrawals yet</li>"; updateWithdrawBtn(newEarnings); return; }
+    let lastStatus = null;
     snap.forEach((doc,i)=>{
       const d = doc.data();
-      const li = document.createElement("li");
       const createdAt = d.createdAt?.toDate ? d.createdAt.toDate().toLocaleString() : "N/A";
-      li.innerHTML = `
-        <div style="flex:1;text-align:left;">
-          <strong>KSh ${d.amount}</strong><br>
-          <small>${createdAt} | ${d.method || "Mpesa"}</small>
-        </div>
-        <span class="status-badge ${d.status==="paid"?"active":"inactive"}">${d.status.toUpperCase()}</span>`;
+      const li = document.createElement("li");
+      li.innerHTML = `<div style="flex:1;text-align:left;">
+        <strong>KSh ${d.amount}</strong><br>
+        <small>${createdAt} | ${d.method || "Mpesa"}</small>
+      </div>
+      <span class="status-badge ${d.status==="paid"?"active":"inactive"}">${d.status.toUpperCase()}</span>`;
       withdrawalsList.appendChild(li);
-
-      if(i===0){
-        updateWithdrawBtn(earningsNow, d.status, userData.status);
-        withdrawStatus.textContent = `Last withdrawal: ${d.status.toUpperCase()}`;
-      }
+      if(i===0) lastStatus = d.status;
     });
+    withdrawStatus.textContent = lastStatus ? `Last withdrawal: ${lastStatus.toUpperCase()}` : "";
+    updateWithdrawBtn(newEarnings, lastStatus);
   });
 
-  // Withdraw request
+  // Withdraw button
   withdrawBtn.onclick = async ()=>{
-    if(userData.status!=="active") return alert("You must activate your account first.");
-    if(earningsNow <= 0) return;
-
+    if(userData.status!=="active"){ alert("Activate account first."); return; }
+    if(newEarnings<=0){ alert("No earnings to withdraw!"); return; }
     await db.collection("withdrawals").add({
       userId: uid,
-      amount: earningsNow,
+      amount: newEarnings,
       status: "pending",
       method: userData.paymentMethod || "Mpesa",
       createdAt: firebase.firestore.FieldValue.serverTimestamp()
     });
-
-    // ✅ Update lastWithdrawCount permanently
-    await db.collection("users").doc(uid).update({ 
-      lastWithdrawCount: activeReferrals,
-      earnings: 0 
+    // Update user fields
+    await db.collection("users").doc(uid).update({
+      earnings: 0,
+      lastWithdrawCount: activeRefSnap.size,
+      withdrawalRequested: true,
+      withdrawalRequestedAt: firebase.firestore.FieldValue.serverTimestamp()
     });
-
     earningsSpan.textContent = 0;
-    updateWithdrawBtn(0, "pending", userData.status);
+    updateWithdrawBtn(0,"pending");
     withdrawStatus.textContent = "Last withdrawal: PENDING";
     alert("Withdrawal request sent!");
   };
 
-  function updateWithdrawBtn(earnings, lastStatus, accountStatus){
-    if(accountStatus!=="active"){
+  function updateWithdrawBtn(earnings, lastStatus=null){
+    if(userData.status!=="active"){
+      withdrawBtn.disabled=true;
       withdrawBtn.textContent="Activate account first";
+    } else if(lastStatus==="pending" || userData.withdrawalRequested){
       withdrawBtn.disabled=true;
-    }else if(lastStatus==="pending"){
       withdrawBtn.textContent="Withdraw (Pending...)";
+    } else if(earnings<=0){
       withdrawBtn.disabled=true;
-    }else if(earnings<=0){
       withdrawBtn.textContent="Withdraw (No Earnings)";
-      withdrawBtn.disabled=true;
-    }else{
-      withdrawBtn.textContent="Withdraw";
+    } else {
       withdrawBtn.disabled=false;
+      withdrawBtn.textContent="Withdraw";
     }
   }
 });
