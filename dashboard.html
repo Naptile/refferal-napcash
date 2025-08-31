@@ -10,7 +10,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <style>
 body { background:#000; color:#fff; margin:0; font-family: Arial, sans-serif; }
-.nav { display:flex; align-items:center; justify-content:space-between; padding:15px 20px; background:#111; }
+.nav { display:flex; align-items:center; justify-content:space-between; padding:15px 20px; background:#111; flex-wrap:wrap;}
 .brand { font-size:1.5rem; color:orange; font-weight:bold; }
 .btn-orange { background:orange; border:none; color:black; font-weight:bold; padding:8px 12px; border-radius:6px; cursor:pointer; transition:0.3s; }
 .btn-orange:disabled { background:gray; color:#ddd; cursor:not-allowed; }
@@ -43,21 +43,37 @@ input#refLink { width:100%; padding:5px; border:none; border-radius:5px; color:#
   <div class="card">
     <h2>Dashboard</h2>
     <div class="dashboard-grid">
+
+      <!-- Referral Earnings Summary -->
+      <div class="info-card">
+        <h3>Referral Earnings Summary</h3>
+        <p>Total Earnings: KSh <span id="totalEarnings">0</span></p>
+        <p>Pending Withdrawals: KSh <span id="pendingEarnings">0</span></p>
+        <p>Paid Withdrawals: KSh <span id="paidEarnings">0</span></p>
+      </div>
+
+      <!-- Status -->
       <div class="info-card">
         <h3>Status</h3>
         <p id="status">Loading...</p>
         <button id="activateBtn" class="btn-orange" style="margin-top:10px;">Activate</button>
       </div>
+
+      <!-- Referral Code -->
       <div class="info-card">
         <h3>Your Referral Code</h3>
         <p id="refCode">Loading...</p>
       </div>
+
+      <!-- Earnings -->
       <div class="info-card">
         <h3>Your Earnings</h3>
         <p>KSh <span id="earnings">0</span></p>
         <button id="withdrawBtn" class="btn-orange" style="margin-top:10px;">Withdraw</button>
         <p id="withdrawStatus" style="margin-top:8px; font-size:0.9rem; color:orange;"></p>
       </div>
+
+      <!-- Referral Link -->
       <div class="info-card">
         <h3>Referral Link</h3>
         <input type="text" id="refLink" readonly>
@@ -106,6 +122,10 @@ const activateBtn = document.getElementById("activateBtn");
 const userEmail = document.getElementById("userEmail");
 const logoutBtn = document.getElementById("logoutBtn");
 
+const totalEarningsSpan = document.getElementById("totalEarnings");
+const pendingEarningsSpan = document.getElementById("pendingEarnings");
+const paidEarningsSpan = document.getElementById("paidEarnings");
+
 let userData = null;
 let uid = null;
 
@@ -121,7 +141,7 @@ auth.onAuthStateChanged(async user => {
 
   if(userData.status==="active") activateBtn.style.display="none";
 
-  activateBtn.onclick = ()=> {
+  activateBtn.onclick = ()=>{
     const msg = `Hi Admin, I want to activate my account. My name is ${userData.fullName}`;
     const url = `https://wa.me/254718439373?text=${encodeURIComponent(msg)}`;
     window.open(url,"_blank");
@@ -132,39 +152,33 @@ auth.onAuthStateChanged(async user => {
   refLinkInput.value = referralLink;
   copyBtn.onclick = ()=>navigator.clipboard.writeText(referralLink).then(()=>alert("Referral link copied!"));
 
-  // Real-time referrals listener
-  db.collection("users")
-    .where("referredBy", "==", userData.referralCode)
-    .onSnapshot(snapshot => {
-      const referralsList = document.getElementById("referralsList");
-      referralsList.innerHTML = "";
-      let activeCount = 0;
+  // Update referred users list
+  const refSnap = await db.collection("users").where("referredBy","==",userData.referralCode).get();
+  const referralsList = document.getElementById("referralsList");
+  referralsList.innerHTML="";
+  if(refSnap.empty){ referralsList.innerHTML="<li>No referrals yet</li>"; }
+  refSnap.forEach(doc=>{
+    const d = doc.data();
+    const li = document.createElement("li");
+    li.innerHTML = `<span>${d.fullName || d.email}</span><span class="status-badge ${d.status}">${d.status.toUpperCase()}</span>`;
+    referralsList.appendChild(li);
+  });
 
-      if(snapshot.empty){
-        referralsList.innerHTML = "<li>No referrals yet</li>";
-      }
+  // Earnings = 50 per active referral since last withdrawal
+  const activeRefSnap = await db.collection("users")
+    .where("referredBy","==",userData.referralCode)
+    .where("status","==","active")
+    .get();
 
-      snapshot.forEach(doc => {
-        const d = doc.data();
-        const li = document.createElement("li");
-        li.innerHTML = `<span>${d.fullName || d.email}</span>
-                        <span class="status-badge ${d.status}">${d.status.toUpperCase()}</span>`;
-        referralsList.appendChild(li);
+  const newEarnings = (activeRefSnap.size - (userData.lastWithdrawCount || 0)) * 50;
+  earningsSpan.textContent = newEarnings > 0 ? newEarnings : 0;
 
-        if(d.status === "active") activeCount++;
-      });
-
-      // Update earnings dynamically
-      const newEarnings = (activeCount - (userData.lastWithdrawCount || 0)) * 50;
-      earningsSpan.textContent = newEarnings > 0 ? newEarnings : 0;
-      updateWithdrawBtn(newEarnings);
-    });
-
-  // Withdrawals listener
+  // Withdrawals
   db.collection("withdrawals").where("userId","==",uid).orderBy("createdAt","desc").onSnapshot(snap=>{
     withdrawalsList.innerHTML="";
-    if(snap.empty){ withdrawalsList.innerHTML="<li>No withdrawals yet</li>"; updateWithdrawBtn(earningsSpan.textContent); return; }
     let lastStatus = null;
+    let pending = 0, paid = 0;
+    if(snap.empty){ withdrawalsList.innerHTML="<li>No withdrawals yet</li>"; } 
     snap.forEach((doc,i)=>{
       const d = doc.data();
       const createdAt = d.createdAt?.toDate ? d.createdAt.toDate().toLocaleString() : "N/A";
@@ -175,58 +189,39 @@ auth.onAuthStateChanged(async user => {
       </div>
       <span class="status-badge ${d.status==="paid"?"active":"inactive"}">${d.status.toUpperCase()}</span>`;
       withdrawalsList.appendChild(li);
+      if(d.status==="pending") pending += d.amount;
+      if(d.status==="paid") paid += d.amount;
       if(i===0) lastStatus = d.status;
     });
     withdrawStatus.textContent = lastStatus ? `Last withdrawal: ${lastStatus.toUpperCase()}` : "";
-    updateWithdrawBtn(earningsSpan.textContent, lastStatus);
+    pendingEarningsSpan.textContent = pending;
+    paidEarningsSpan.textContent = paid;
   });
 
+  // Withdraw button
   withdrawBtn.onclick = async ()=>{
-    const currentEarnings = parseInt(earningsSpan.textContent);
     if(userData.status!=="active"){ alert("Activate account first."); return; }
-    if(currentEarnings<=0){ alert("No earnings to withdraw!"); return; }
+    if(newEarnings<=0){ alert("No earnings to withdraw!"); return; }
     await db.collection("withdrawals").add({
       userId: uid,
-      amount: currentEarnings,
+      amount: newEarnings,
       status: "pending",
       method: userData.paymentMethod || "Mpesa",
       createdAt: firebase.firestore.FieldValue.serverTimestamp()
     });
     await db.collection("users").doc(uid).update({
-      lastWithdrawCount: currentEarnings / 50 + (userData.lastWithdrawCount || 0),
+      earnings: 0,
+      lastWithdrawCount: activeRefSnap.size,
       withdrawalRequested: true,
       withdrawalRequestedAt: firebase.firestore.FieldValue.serverTimestamp()
     });
     earningsSpan.textContent = 0;
     withdrawStatus.textContent = "Last withdrawal: PENDING";
-    updateWithdrawBtn(0,"pending");
     alert("Withdrawal request sent!");
-  };
-
-  function updateWithdrawBtn(earnings, lastStatus=null){
-    if(userData.status!=="active"){
-      withdrawBtn.disabled=true;
-      withdrawBtn.textContent="Activate account first";
-    } else if(lastStatus==="pending" || userData.withdrawalRequested){
-      withdrawBtn.disabled=true;
-      withdrawBtn.textContent="Withdraw (Pending...)";
-    } else if(earnings<=0){
-      withdrawBtn.disabled=true;
-      withdrawBtn.textContent="Withdraw (No Earnings)";
-    } else {
-      withdrawBtn.disabled=false;
-      withdrawBtn.textContent="Withdraw";
-    }
-  }
-
-  // Profile button
-  document.getElementById("profileBtn").onclick = ()=>{
-    alert(`Profile Info:\nName: ${userData.fullName}\nEmail: ${userData.email}\nPhone: ${userData.phone}`);
   };
 
 });
 
-// Logout button
 logoutBtn.onclick = async ()=>{
   await auth.signOut();
   window.location.href="https://naptile.github.io/refferal-napcash/login.html";
