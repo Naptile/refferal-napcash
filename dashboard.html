@@ -9,7 +9,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
   <style>
-    body { background: #000; color: #fff; margin:0; font-family: Arial, sans-serif; }
+    body { background:#000; color:#fff; margin:0; font-family: Arial, sans-serif; }
     .nav { display:flex; align-items:center; justify-content:space-between; padding:15px 20px; background:#111; position:relative; }
     .brand { font-size:1.5rem; color:orange; font-weight:bold; }
     .hamburger { display:none; font-size:2rem; cursor:pointer; color:orange; margin-right:10px; }
@@ -50,8 +50,6 @@
   <div class="brand">NapCash</div>
   <div class="nav-links" id="navLinks">
     <button id="profileBtn" class="btn-orange">Profile</button>
-    <button id="withdrawBtn" class="btn-orange">Withdraw</button>
-    <button id="referralBtn" class="btn-orange">Referrals</button>
     <span id="userEmail"></span>
     <button id="logoutBtn" class="btn-orange">Logout</button>
   </div>
@@ -73,6 +71,7 @@
       <div class="info-card">
         <h3>Your Earnings</h3>
         <p>KSh <span id="earnings">0</span></p>
+        <button id="withdrawBtn" class="btn-orange" style="margin-top:10px;">Withdraw</button>
       </div>
       <div class="info-card">
         <h3>Referral Link</h3>
@@ -192,7 +191,7 @@ auth.onAuthStateChanged(async user => {
     });
   } else { referralsList.innerHTML="<li>No referrals yet</li>"; }
 
-  // Earnings from active referrals
+  // Earnings calculation
   const activeRefSnap = await db.collection("users")
                                 .where("referredBy","==",data.referralCode)
                                 .where("status","==","active")
@@ -202,25 +201,26 @@ auth.onAuthStateChanged(async user => {
   earningsSpan.textContent = totalEarnings;
 
   // Withdraw button
-  if(data.status !== "active"){
-    withdrawBtn.textContent = "Activate account to withdraw";
-    withdrawBtn.onclick = () => openWhatsApp(fullName);
-  } else {
-    withdrawBtn.textContent = "Withdraw";
-    withdrawBtn.onclick = async () => {
-      if(totalEarnings <= 0){ alert("You have no earnings to withdraw!"); return; }
-      await db.collection("withdrawals").add({
-        userId: uid,
-        amount: totalEarnings,
-        status: "pending",
-        method: data.paymentMethod || "Mpesa",
-        createdAt: firebase.firestore.FieldValue.serverTimestamp()
-      });
-      alert("Withdrawal request sent! Admin will process it shortly.");
-    };
-  }
+  withdrawBtn.onclick = async () => {
+    if(totalEarnings <= 0){ alert("You have no earnings to withdraw!"); return; }
+    if(totalEarnings >= 50 && !localStorage.getItem("withdrawConfirmed")){
+      const confirmWithdraw = confirm(`You have KSh ${totalEarnings}. Do you want to withdraw?`);
+      if(!confirmWithdraw) return;
+      localStorage.setItem("withdrawConfirmed","true");
+    }
+    await db.collection("withdrawals").add({
+      userId: uid,
+      amount: totalEarnings,
+      status: "pending",
+      method: data.paymentMethod || "Mpesa",
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    await db.collection("users").doc(uid).update({ earnings: 0 });
+    earningsSpan.textContent = 0;
+    alert("Withdrawal request sent! Admin will process it shortly.");
+  };
 
-  // Status activate button
+  // Activate button
   if(data.status !== "active"){
     activateBtn.style.display = "inline-block";
     activateBtn.onclick = () => openWhatsApp(fullName);
