@@ -15,7 +15,7 @@
     .hamburger { display:none; font-size:2rem; cursor:pointer; color:orange; margin-right:10px; }
     .nav-links { display:flex; gap:10px; align-items:center; }
     .btn-orange { background:orange; border:none; color:black; font-weight:bold; padding:8px 12px; border-radius:6px; cursor:pointer; transition:0.3s; }
-    .btn-orange:disabled { background:gray; cursor:not-allowed; }
+    .btn-orange:disabled { background:gray; color:#ddd; cursor:not-allowed; }
     .btn-orange:hover:enabled { background:#ff9900; color:#fff; }
     .hero { max-width:1000px; margin:20px auto; padding:20px; }
     .card { background:#111; padding:25px; border-radius:12px; box-shadow:0 5px 20px rgba(0,0,0,0.5); }
@@ -95,7 +95,6 @@ firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.firestore();
 
-// Elements
 const withdrawBtn = document.getElementById("withdrawBtn");
 const withdrawStatus = document.getElementById("withdrawStatus");
 const earningsSpan = document.getElementById("earnings");
@@ -112,13 +111,13 @@ auth.onAuthStateChanged(async user => {
   if (!userDoc.exists) return;
   const data = userDoc.data();
 
-  // Referral link + code
+  // Referral link
   refCodeSpan.textContent = data.referralCode;
   const referralLink = `${window.location.origin}/register.html?ref=${data.referralCode}`;
   refLinkInput.value = referralLink;
   copyBtn.onclick = ()=>navigator.clipboard.writeText(referralLink).then(()=>alert("Referral link copied!"));
 
-  // Earnings from active referrals
+  // Earnings calculation
   const activeRefSnap = await db.collection("users")
     .where("referredBy","==",data.referralCode)
     .where("status","==","active")
@@ -127,13 +126,12 @@ auth.onAuthStateChanged(async user => {
   let totalEarnings = activeRefSnap.size * 50;
   earningsSpan.textContent = totalEarnings;
 
-  // Withdraw history + button logic
+  // Withdrawals history
   db.collection("withdrawals").where("userId","==",uid).orderBy("createdAt","desc").onSnapshot(snap=>{
     withdrawalsList.innerHTML="";
-    let lastStatus = null;
     if(snap.empty){ 
       withdrawalsList.innerHTML="<li>No withdrawals yet</li>"; 
-      withdrawBtn.disabled = totalEarnings <= 0; 
+      updateWithdrawBtn(totalEarnings, null);
       return; 
     }
 
@@ -149,25 +147,16 @@ auth.onAuthStateChanged(async user => {
         <span class="status" style="background:${d.status==="paid"?"green":d.status==="pending"?"orange":"red"}">${d.status.toUpperCase()}</span>`;
       withdrawalsList.appendChild(li);
 
-      if(i===0){ // most recent
-        lastStatus = d.status;
+      if(i===0){ // last withdrawal
+        updateWithdrawBtn(totalEarnings, d.status);
         withdrawStatus.textContent = `Last withdrawal: ${d.status.toUpperCase()}`;
-
-        // New rules:
-        if(d.status==="pending"){ 
-          withdrawBtn.disabled = true; 
-        } else if(d.status==="paid" && totalEarnings<=0){ 
-          withdrawBtn.disabled = true; 
-        } else { 
-          withdrawBtn.disabled = totalEarnings <= 0; 
-        }
       }
     });
   });
 
   // Withdraw request
   withdrawBtn.onclick = async ()=>{
-    if(totalEarnings <= 0) return alert("No earnings to withdraw!");
+    if(totalEarnings <= 0) return;
     await db.collection("withdrawals").add({
       userId: uid,
       amount: totalEarnings,
@@ -177,10 +166,26 @@ auth.onAuthStateChanged(async user => {
     });
     await db.collection("users").doc(uid).update({ earnings: 0 });
     earningsSpan.textContent = 0;
-    withdrawBtn.disabled = true;
+    updateWithdrawBtn(0, "pending");
     withdrawStatus.textContent = "Last withdrawal: PENDING";
     alert("Withdrawal request sent!");
   };
+
+  function updateWithdrawBtn(earnings, lastStatus){
+    if(lastStatus==="pending"){
+      withdrawBtn.textContent="Withdraw (Pending...)";
+      withdrawBtn.disabled=true;
+    }else if(lastStatus==="paid" && earnings<=0){
+      withdrawBtn.textContent="Withdraw (No Earnings)";
+      withdrawBtn.disabled=true;
+    }else if(earnings<=0){
+      withdrawBtn.textContent="Withdraw (No Earnings)";
+      withdrawBtn.disabled=true;
+    }else{
+      withdrawBtn.textContent="Withdraw";
+      withdrawBtn.disabled=false;
+    }
+  }
 });
 </script>
 </body>
