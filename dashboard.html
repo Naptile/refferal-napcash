@@ -105,6 +105,7 @@ const statusText = document.getElementById("status");
 const activateBtn = document.getElementById("activateBtn");
 
 let userData = null;
+let totalEarnings = 0;
 
 // Auth listener
 auth.onAuthStateChanged(async user => {
@@ -121,7 +122,6 @@ auth.onAuthStateChanged(async user => {
   if (userData.status === "active") {
     activateBtn.style.display = "none";
   } else {
-    // Activate button → WhatsApp
     activateBtn.onclick = () => {
       const msg = `Hi Admin, I want to activate my account. My name is ${userData.name || ""}`;
       const url = `https://wa.me/254718439373?text=${encodeURIComponent(msg)}`;
@@ -150,12 +150,16 @@ auth.onAuthStateChanged(async user => {
     referralsList.appendChild(li);
   });
 
-  // Earnings
+  // Earnings (count active referrals only)
   const activeRefSnap = await db.collection("users")
     .where("referredBy","==",userData.referralCode)
     .where("status","==","active")
     .get();
-  let totalEarnings = activeRefSnap.size * 50;
+
+  totalEarnings = activeRefSnap.size * 50;
+
+  // Add stored earnings (after withdrawals we reset to 0)
+  totalEarnings += userData.earnings || 0;
   earningsSpan.textContent = totalEarnings;
 
   // Withdrawals history
@@ -189,6 +193,8 @@ auth.onAuthStateChanged(async user => {
   withdrawBtn.onclick = async ()=>{
     if(userData.status!=="active") return alert("You must activate your account first.");
     if(totalEarnings <= 0) return;
+
+    // Create withdrawal
     await db.collection("withdrawals").add({
       userId: uid,
       amount: totalEarnings,
@@ -196,8 +202,14 @@ auth.onAuthStateChanged(async user => {
       method: userData.paymentMethod || "Mpesa",
       createdAt: firebase.firestore.FieldValue.serverTimestamp()
     });
+
+    // Reset permanent earnings
     await db.collection("users").doc(uid).update({ earnings: 0 });
+
+    // Reset local variable & UI
+    totalEarnings = 0;
     earningsSpan.textContent = 0;
+
     updateWithdrawBtn(0, "pending", userData.status);
     withdrawStatus.textContent = "Last withdrawal: PENDING";
     alert("Withdrawal request sent!");
