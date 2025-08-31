@@ -105,7 +105,8 @@ const statusText = document.getElementById("status");
 const activateBtn = document.getElementById("activateBtn");
 
 let userData = null;
-let totalEarnings = 0;
+let earningsNow = 0;
+let activeReferrals = 0;
 
 // Auth listener
 auth.onAuthStateChanged(async user => {
@@ -118,12 +119,12 @@ auth.onAuthStateChanged(async user => {
   // Show status
   statusText.textContent = userData.status || "inactive";
 
-  // Hide Activate button if already active
-  if (userData.status === "active") {
+  // Hide activate button if active
+  if(userData.status === "active"){
     activateBtn.style.display = "none";
   } else {
     activateBtn.onclick = () => {
-      const msg = `Hi Admin, I want to activate my account. My name is ${userData.name || ""}`;
+      const msg = `Hi Admin, I want to activate my account. My name is ${userData.fullName || ""}`;
       const url = `https://wa.me/254718439373?text=${encodeURIComponent(msg)}`;
       window.open(url, "_blank");
     };
@@ -144,30 +145,29 @@ auth.onAuthStateChanged(async user => {
     const d = doc.data();
     const li = document.createElement("li");
     li.innerHTML = `
-      <span>${d.name || d.email}</span>
+      <span>${d.fullName || d.email}</span>
       <span class="status-badge ${d.status}">${d.status.toUpperCase()}</span>
     `;
     referralsList.appendChild(li);
   });
 
-  // Earnings (count active referrals only)
+  // Earnings calculation using lastWithdrawCount
   const activeRefSnap = await db.collection("users")
     .where("referredBy","==",userData.referralCode)
     .where("status","==","active")
     .get();
 
-  totalEarnings = activeRefSnap.size * 50;
-
-  // Add stored earnings (after withdrawals we reset to 0)
-  totalEarnings += userData.earnings || 0;
-  earningsSpan.textContent = totalEarnings;
+  activeReferrals = activeRefSnap.size;
+  const lastWithdrawCount = userData.lastWithdrawCount || 0;
+  earningsNow = (activeReferrals - lastWithdrawCount) * 50;
+  earningsSpan.textContent = earningsNow;
 
   // Withdrawals history
   db.collection("withdrawals").where("userId","==",uid).orderBy("createdAt","desc").onSnapshot(snap=>{
     withdrawalsList.innerHTML="";
     if(snap.empty){ 
       withdrawalsList.innerHTML="<li>No withdrawals yet</li>"; 
-      updateWithdrawBtn(totalEarnings, null, userData.status);
+      updateWithdrawBtn(earningsNow, null, userData.status);
       return; 
     }
     snap.forEach((doc,i)=>{
@@ -183,7 +183,7 @@ auth.onAuthStateChanged(async user => {
       withdrawalsList.appendChild(li);
 
       if(i===0){
-        updateWithdrawBtn(totalEarnings, d.status, userData.status);
+        updateWithdrawBtn(earningsNow, d.status, userData.status);
         withdrawStatus.textContent = `Last withdrawal: ${d.status.toUpperCase()}`;
       }
     });
@@ -192,24 +192,23 @@ auth.onAuthStateChanged(async user => {
   // Withdraw request
   withdrawBtn.onclick = async ()=>{
     if(userData.status!=="active") return alert("You must activate your account first.");
-    if(totalEarnings <= 0) return;
+    if(earningsNow <= 0) return;
 
-    // Create withdrawal
     await db.collection("withdrawals").add({
       userId: uid,
-      amount: totalEarnings,
+      amount: earningsNow,
       status: "pending",
       method: userData.paymentMethod || "Mpesa",
       createdAt: firebase.firestore.FieldValue.serverTimestamp()
     });
 
-    // Reset permanent earnings
-    await db.collection("users").doc(uid).update({ earnings: 0 });
+    // ✅ Update lastWithdrawCount permanently
+    await db.collection("users").doc(uid).update({ 
+      lastWithdrawCount: activeReferrals,
+      earnings: 0 
+    });
 
-    // Reset local variable & UI
-    totalEarnings = 0;
     earningsSpan.textContent = 0;
-
     updateWithdrawBtn(0, "pending", userData.status);
     withdrawStatus.textContent = "Last withdrawal: PENDING";
     alert("Withdrawal request sent!");
