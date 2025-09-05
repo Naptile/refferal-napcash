@@ -5,38 +5,32 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>NapCash – Login</title>
   <link rel="stylesheet" href="styles/login.css">
-  <!-- Firebase SDK -->
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+  <style>
+    body { margin:0; font-family:Arial, sans-serif; background:#000; color:#fff; display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:100vh; }
+    .card { background:#111; padding:30px; border-radius:12px; max-width:400px; width:90%; }
+    input { width:100%; padding:10px; margin:10px 0; border:none; border-radius:6px; }
+    button { width:100%; padding:10px; border:none; border-radius:6px; background:orange; color:black; font-weight:bold; cursor:pointer; transition:0.3s; }
+    button:hover { background:#ff9900; color:#fff; }
+    .msg { margin-top:10px; color:orange; }
+    a { color:orange; text-decoration:none; }
+  </style>
 </head>
-<body class="bg">
-
-  <!-- Navigation -->
-  <div class="nav">
-    <div class="brand">NapCash</div>
-    <div>
-      <a href="index.html">Home</a>
-      <a href="index.html">Register</a>
-    </div>
-  </div>
-
-  <!-- Login Card -->
-  <div class="hero">
-    <div class="card">
-      <h2 style="color:var(--black);">Login to NapCash</h2>
-      <form id="loginForm" class="form">
-        <input type="email" id="email" placeholder="Email Address" required>
-        <input type="password" id="password" placeholder="Password" required>
-        <button type="submit">Login</button>
-      </form>
-      <p style="margin-top:10px;">Don’t have an account? <a href="index.html" class="link">Register</a></p>
-      <p id="msg"></p>
-    </div>
+<body>
+  <div class="card">
+    <h2>Login to NapCash</h2>
+    <form id="loginForm">
+      <input type="email" id="email" placeholder="Email Address" required>
+      <input type="password" id="password" placeholder="Password" required>
+      <button type="submit">Login</button>
+    </form>
+    <p style="margin-top:10px;">Don’t have an account? <a href="index.html">Register</a></p>
+    <p id="msg" class="msg"></p>
   </div>
 
   <script>
-    // Firebase configuration
     const firebaseConfig = {
       apiKey: "AIzaSyDybgITS1zttYLSa1_vsV0vYLzqbr42abA",
       authDomain: "napcash-3e696.firebaseapp.com",
@@ -45,49 +39,43 @@
       messagingSenderId: "720221815295",
       appId: "1:720221815295:web:e8b299b30909c6cc9927ca"
     };
-
-    // Initialize Firebase
     firebase.initializeApp(firebaseConfig);
     const auth = firebase.auth();
     const db = firebase.firestore();
 
-    // Login form handler
-    document.getElementById("loginForm").addEventListener("submit", async (e) => {
+    const loginForm = document.getElementById("loginForm");
+    const msg = document.getElementById("msg");
+
+    loginForm.addEventListener("submit", async (e) => {
       e.preventDefault();
       const email = document.getElementById("email").value.trim();
       const password = document.getElementById("password").value.trim();
-      const msg = document.getElementById("msg");
-
       msg.textContent = "Checking account...";
 
       try {
-        // Step 1: Authenticate with Firebase Auth
+        // Step 1: Firebase Auth
         const userCred = await auth.signInWithEmailAndPassword(email, password);
-        const uid = userCred.user.uid;
+        let uid = userCred.user.uid;
 
-        // Step 2: First try to find Firestore user doc by UID
+        // Step 2: Try fetching user document by UID
         let userDoc = await db.collection("users").doc(uid).get();
 
-        // Step 3: If UID doc doesn't exist, fallback to lookup by email
+        // Step 3: Fallback: search by email if UID doc doesn't exist
         if (!userDoc.exists) {
-          const userSnap = await db.collection("users")
-            .where("email", "==", email)
-            .limit(1)
-            .get();
-
-          if (!userSnap.empty) {
-            userDoc = userSnap.docs[0]; // take the first matching doc
+          const snap = await db.collection("users").where("email","==",email).limit(1).get();
+          if (!snap.empty) {
+            userDoc = snap.docs[0];
+            uid = userDoc.id; // update UID
+          } else {
+            msg.textContent = "Account not registered in database. Contact support.";
+            await auth.signOut();
+            return;
           }
         }
 
-        // Step 4: Check if user doc exists at all
-        if (userDoc && userDoc.exists) {
-          msg.textContent = "Login successful! Redirecting...";
-          setTimeout(() => window.location.href = "dashboard.html", 1500);
-        } else {
-          msg.textContent = "Account not registered in database. Contact support.";
-          await auth.signOut();
-        }
+        // Login successful
+        msg.textContent = "Login successful! Redirecting...";
+        setTimeout(() => window.location.href = "dashboard.html", 1500);
 
       } catch (err) {
         msg.textContent = err.message;
