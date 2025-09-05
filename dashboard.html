@@ -99,7 +99,6 @@ const auth = firebase.auth();
 const db = firebase.firestore();
 
 const withdrawBtn = document.getElementById("withdrawBtn");
-const withdrawStatus = document.getElementById("withdrawStatus");
 const earningsSpan = document.getElementById("earnings");
 const lifetimeEarningsSpan = document.getElementById("lifetimeEarnings");
 const withdrawalsList = document.getElementById("withdrawalsList");
@@ -160,16 +159,27 @@ auth.onAuthStateChanged(async user => {
 
         if(d.status==="active") activeCount++;
         const li = document.createElement("li");
-        li.innerHTML = `<span>${d.fullName || d.email}</span><span class="status-badge ${d.status==="active"?"active":"inactive"}">${d.status.toUpperCase()}</span>`;
+        li.innerHTML = `<span>${d.fullName || d.email}</span>
+                        <span class="status-badge ${d.status==="active"?"active":"inactive"}">
+                          ${d.status.toUpperCase()}
+                        </span>`;
         referralsList.appendChild(li);
       });
 
-      // Lifetime = all active referrals × 50
-      lifetimeEarningsSpan.textContent = activeCount * 50;
+      // Lifetime earnings = all active referrals × 50
+      const lifetime = activeCount * 50;
+      lifetimeEarningsSpan.textContent = lifetime;
 
-      // Balance = new active referrals since last withdrawal × 50
-      const newEarnings = (activeCount - (userData.lastWithdrawCount || 0)) * 50;
-      earningsSpan.textContent = newEarnings > 0 ? newEarnings : 0;
+      // Balance = lifetime - total withdrawn
+      const totalWithdrawn = userData.totalWithdrawn || 0;
+      const currentBalance = lifetime - totalWithdrawn;
+      earningsSpan.textContent = currentBalance;
+
+      // Update Firestore
+      await db.collection("users").doc(uid).update({
+        lifetimeEarnings: lifetime,
+        earnings: currentBalance
+      });
     });
 
   // Withdrawals history
@@ -192,24 +202,23 @@ auth.onAuthStateChanged(async user => {
   // Withdraw
   withdrawBtn.onclick = async ()=>{
     if(userData.status!=="active"){ alert("Activate account first."); return; }
-    const activeRefSnap = await db.collection("users")
-      .where("referredBy","==",userData.referralCode)
-      .where("status","==","active").get();
-    const newEarnings = (activeRefSnap.size - (userData.lastWithdrawCount || 0)) * 50;
-    if(newEarnings<=0){ alert("No earnings to withdraw!"); return; }
+
+    const withdrawAmount = parseInt(earningsSpan.textContent);
+    if(withdrawAmount <= 0){ alert("No earnings to withdraw!"); return; }
 
     await db.collection("withdrawals").add({
       userId: uid,
-      amount: newEarnings,
+      amount: withdrawAmount,
       status: "pending",
       method: userData.paymentMethod || "Mpesa",
       createdAt: firebase.firestore.FieldValue.serverTimestamp()
     });
+
     await db.collection("users").doc(uid).update({
-      lastWithdrawCount: activeRefSnap.size,
-      withdrawalRequested: true,
-      withdrawalRequestedAt: firebase.firestore.FieldValue.serverTimestamp()
+      totalWithdrawn: (userData.totalWithdrawn || 0) + withdrawAmount,
+      earnings: 0
     });
+
     earningsSpan.textContent = 0;
     alert("Withdrawal request sent!");
   };
