@@ -10,7 +10,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <style>
 body { background:#000; color:#fff; margin:0; font-family: Arial, sans-serif; }
-.nav { display:flex; align-items:center; justify-content:space-between; padding:15px 20px; background:#111; }
+.nav { display:flex; align-items:center; justify-content:space-between; padding:15px 20px; background:#111; flex-wrap:wrap; }
 .brand { font-size:1.5rem; color:orange; font-weight:bold; }
 .btn-orange { background:orange; border:none; color:black; font-weight:bold; padding:8px 12px; border-radius:6px; cursor:pointer; transition:0.3s; }
 .btn-orange:disabled { background:gray; color:#ddd; cursor:not-allowed; }
@@ -22,10 +22,14 @@ body { background:#000; color:#fff; margin:0; font-family: Arial, sans-serif; }
 .info-card h3 { color:orange; margin-bottom:8px; }
 input#refLink { width:100%; padding:5px; border:none; border-radius:5px; color:#000; margin-bottom:8px; }
 .referral-list, .withdrawal-list { list-style:none; padding-left:0; margin-top:10px; }
-.referral-list li, .withdrawal-list li { display:flex; justify-content:space-between; align-items:center; background:#222; padding:10px; border-radius:6px; margin-bottom:8px; }
+.referral-list li, .withdrawal-list li { display:flex; justify-content:space-between; align-items:center; background:#222; padding:10px; border-radius:6px; margin-bottom:8px; flex-wrap:wrap; }
 .status-badge { font-size:0.8rem; padding:4px 8px; border-radius:4px; font-weight:bold; color:#fff; }
 .active { background:green; }
 .inactive { background:orange; }
+@media(max-width:600px){
+  .nav { flex-direction:column; align-items:flex-start; }
+  .info-card { padding:15px; }
+}
 </style>
 </head>
 <body>
@@ -90,7 +94,7 @@ const firebaseConfig = {
   apiKey: "AIzaSyDybgITS1zttYLSa1_vsV0vYLzqbr42abA",
   authDomain: "napcash-3e696.firebaseapp.com",
   projectId: "napcash-3e696",
-  storageBucket: "napcash-3e696.firebasestorage.app",
+  storageBucket: "napcash-3e696.appspot.com",
   messagingSenderId: "720221815295",
   appId: "1:720221815295:web:e8b299b30909c6cc9927ca"
 };
@@ -99,7 +103,6 @@ const auth = firebase.auth();
 const db = firebase.firestore();
 
 const withdrawBtn = document.getElementById("withdrawBtn");
-const withdrawStatus = document.getElementById("withdrawStatus");
 const earningsSpan = document.getElementById("earnings");
 const lifetimeEarningsSpan = document.getElementById("lifetimeEarnings");
 const withdrawalsList = document.getElementById("withdrawalsList");
@@ -126,6 +129,7 @@ auth.onAuthStateChanged(async user => {
   statusText.textContent = userData.status || "pending";
   if(userData.status==="active") activateBtn.style.display="none";
 
+  // Activate button → WhatsApp
   activateBtn.onclick = ()=>{
     const msg = `Hi Admin, I want to activate my account. My name is ${userData.fullName}`;
     const url = `https://wa.me/254718439373?text=${encodeURIComponent(msg)}`;
@@ -148,13 +152,9 @@ auth.onAuthStateChanged(async user => {
       const referralsList = document.getElementById("referralsList");
       referralsList.innerHTML="";
       let activeCount = 0;
-      let seen = new Set();
 
       snapshot.forEach(doc=>{
         const d = doc.data();
-        if(seen.has(doc.id)) return; // prevent duplicates
-        seen.add(doc.id);
-
         if(d.status==="active") activeCount++;
         const li = document.createElement("li");
         li.innerHTML = `<span>${d.fullName || d.email}</span><span class="status-badge ${d.status==="active"?"active":"inactive"}">${d.status.toUpperCase()}</span>`;
@@ -164,9 +164,11 @@ auth.onAuthStateChanged(async user => {
       // Lifetime earnings = all active referrals × 50
       lifetimeEarningsSpan.textContent = activeCount * 50;
 
-      // Current balance = active referrals since last withdrawal × 50
+      // Balance = (active referrals since last withdraw) × 50
       const newEarnings = (activeCount - (userData.lastWithdrawCount || 0)) * 50;
       earningsSpan.textContent = newEarnings > 0 ? newEarnings : 0;
+
+      withdrawBtn.disabled = newEarnings <= 0;
     });
 
   // Withdrawals history
@@ -186,6 +188,7 @@ auth.onAuthStateChanged(async user => {
     });
   });
 
+  // Withdraw logic
   withdrawBtn.onclick = async ()=>{
     if(userData.status!=="active"){ alert("Activate account first."); return; }
     const activeRefSnap = await db.collection("users")
@@ -202,11 +205,10 @@ auth.onAuthStateChanged(async user => {
       createdAt: firebase.firestore.FieldValue.serverTimestamp()
     });
     await db.collection("users").doc(uid).update({
-      lastWithdrawCount: activeRefSnap.size,
-      withdrawalRequested: true,
-      withdrawalRequestedAt: firebase.firestore.FieldValue.serverTimestamp()
+      lastWithdrawCount: activeRefSnap.size
     });
     earningsSpan.textContent = 0;
+    withdrawBtn.disabled = true;
     alert("Withdrawal request sent!");
   };
 
