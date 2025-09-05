@@ -60,7 +60,6 @@ input#refLink { width:100%; padding:5px; border:none; border-radius:5px; color:#
         <h3>Your Balance</h3>
         <p>KSh <span id="earnings">0</span></p>
         <button id="withdrawBtn" class="btn-orange" style="margin-top:10px;">Withdraw</button>
-        <p id="withdrawStatus" style="margin-top:8px; font-size:0.9rem; color:orange;"></p>
       </div>
       <div class="info-card">
         <h3>Lifetime Earnings</h3>
@@ -121,13 +120,19 @@ let uid = null;
 auth.onAuthStateChanged(async user => {
   if(!user) return window.location.href="https://naptile.github.io/refferal-napcash/login.html";
   uid = user.uid;
-  const userDoc = await db.collection("users").doc(uid).get();
-  if(!userDoc.exists) return;
-  userData = userDoc.data();
 
-  userEmail.textContent = userData.fullName || userData.email;
-  statusText.textContent = userData.status || "pending";
-  if(userData.status==="active") activateBtn.style.display="none";
+  // Listen to user document in real-time
+  db.collection("users").doc(uid).onSnapshot(doc=>{
+    if(!doc.exists) return;
+    userData = doc.data();
+
+    userEmail.textContent = userData.fullName || userData.email;
+    statusText.textContent = userData.status || "pending";
+    if(userData.status==="active") activateBtn.style.display="none";
+
+    earningsSpan.textContent = userData.earnings || 0;
+    lifetimeEarningsSpan.textContent = userData.lifetimeEarnings || 0;
+  });
 
   // Activate button → WhatsApp
   activateBtn.onclick = ()=>{
@@ -136,39 +141,37 @@ auth.onAuthStateChanged(async user => {
     window.open(url,"_blank");
   };
 
+  // Referral link
   refCodeSpan.textContent = userData.referralCode;
   const referralLink = `https://naptile.github.io/refferal-napcash/register.html?ref=${userData.referralCode}`;
   refLinkInput.value = referralLink;
   copyBtn.onclick = ()=>navigator.clipboard.writeText(referralLink).then(()=>alert("Referral link copied!"));
 
-  // Profile button
+  // Profile
   profileBtn.onclick = () => {
     alert(`Profile Info:\n\nFull Name: ${userData.fullName}\nEmail: ${userData.email}\nStatus: ${userData.status}\nReferral Code: ${userData.referralCode}`);
   };
 
-  // Real-time listener for referred users
+  // Referred users listener
   db.collection("users").where("referredBy","==",userData.referralCode)
     .onSnapshot(snapshot => {
       const referralsList = document.getElementById("referralsList");
       referralsList.innerHTML="";
-      let activeCount = 0;
-
-      snapshot.forEach(doc=>{
+      snapshot.forEach(async doc=>{
         const d = doc.data();
-        if(d.status==="active") activeCount++;
         const li = document.createElement("li");
         li.innerHTML = `<span>${d.fullName || d.email}</span><span class="status-badge ${d.status==="active"?"active":"inactive"}">${d.status.toUpperCase()}</span>`;
         referralsList.appendChild(li);
+
+        // Reward only once when referral becomes active
+        if(d.status==="active" && !d.rewardedForRef){
+          await db.collection("users").doc(doc.id).update({ rewardedForRef:true });
+          await db.collection("users").doc(uid).update({
+            earnings: firebase.firestore.FieldValue.increment(50),
+            lifetimeEarnings: firebase.firestore.FieldValue.increment(50)
+          });
+        }
       });
-
-      // Lifetime earnings = all active referrals × 50
-      lifetimeEarningsSpan.textContent = activeCount * 50;
-
-      // Balance = (active referrals since last withdraw) × 50
-      const newEarnings = (activeCount - (userData.lastWithdrawCount || 0)) * 50;
-      earningsSpan.textContent = newEarnings > 0 ? newEarnings : 0;
-
-      withdrawBtn.disabled = newEarnings <= 0;
     });
 
   // Withdrawals history
@@ -191,24 +194,21 @@ auth.onAuthStateChanged(async user => {
   // Withdraw logic
   withdrawBtn.onclick = async ()=>{
     if(userData.status!=="active"){ alert("Activate account first."); return; }
-    const activeRefSnap = await db.collection("users")
-      .where("referredBy","==",userData.referralCode)
-      .where("status","==","active").get();
-    const newEarnings = (activeRefSnap.size - (userData.lastWithdrawCount || 0)) * 50;
-    if(newEarnings<=0){ alert("No earnings to withdraw!"); return; }
+    const availableEarnings = userData.earnings || 0;
+    if(availableEarnings<=0){ alert("No earnings to withdraw!"); return; }
 
     await db.collection("withdrawals").add({
       userId: uid,
-      amount: newEarnings,
+      amount: availableEarnings,
       status: "pending",
       method: userData.paymentMethod || "Mpesa",
       createdAt: firebase.firestore.FieldValue.serverTimestamp()
     });
+
+    // Reset balance after withdraw
     await db.collection("users").doc(uid).update({
-      lastWithdrawCount: activeRefSnap.size
+      earnings: 0
     });
-    earningsSpan.textContent = 0;
-    withdrawBtn.disabled = true;
     alert("Withdrawal request sent!");
   };
 
