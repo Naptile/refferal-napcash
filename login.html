@@ -61,19 +61,32 @@
       msg.textContent = "Checking account...";
 
       try {
-        // Step 1: Authenticate
+        // Step 1: Authenticate with Firebase Auth
         const userCred = await auth.signInWithEmailAndPassword(email, password);
         const uid = userCred.user.uid;
 
-        // Step 2: Look up Firestore user doc
-        const userDoc = await db.collection("users").doc(uid).get();
+        // Step 2: First try to find Firestore user doc by UID
+        let userDoc = await db.collection("users").doc(uid).get();
 
-        if (userDoc.exists) {
+        // Step 3: If UID doc doesn't exist, fallback to lookup by email
+        if (!userDoc.exists) {
+          const userSnap = await db.collection("users")
+            .where("email", "==", email)
+            .limit(1)
+            .get();
+
+          if (!userSnap.empty) {
+            userDoc = userSnap.docs[0]; // take the first matching doc
+          }
+        }
+
+        // Step 4: Check if user doc exists at all
+        if (userDoc && userDoc.exists) {
           msg.textContent = "Login successful! Redirecting...";
           setTimeout(() => window.location.href = "dashboard.html", 1500);
         } else {
           msg.textContent = "Account not registered in database. Contact support.";
-          await auth.signOut(); // sign out since no user record
+          await auth.signOut();
         }
 
       } catch (err) {
