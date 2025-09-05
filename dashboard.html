@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+how will the above code be affected and what modification will I need to make:<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -86,12 +86,12 @@ input#refLink { width:100%; padding:5px; border:none; border-radius:5px; color:#
 
 <script>
 const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_AUTH_DOMAIN",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_STORAGE_BUCKET",
-  messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-  appId: "YOUR_APP_ID"
+  apiKey: "AIzaSyDybgITS1zttYLSa1_vsV0vYLzqbr42abA",
+  authDomain: "napcash-3e696.firebaseapp.com",
+  projectId: "napcash-3e696",
+  storageBucket: "napcash-3e696.firebasestorage.app",
+  messagingSenderId: "720221815295",
+  appId: "1:720221815295:web:e8b299b30909c6cc9927ca"
 };
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
@@ -100,7 +100,6 @@ const db = firebase.firestore();
 const withdrawBtn = document.getElementById("withdrawBtn");
 const earningsSpan = document.getElementById("earnings");
 const lifetimeEarningsSpan = document.getElementById("lifetimeEarnings");
-const referralsList = document.getElementById("referralsList");
 const withdrawalsList = document.getElementById("withdrawalsList");
 const refCodeSpan = document.getElementById("refCode");
 const refLinkInput = document.getElementById("refLink");
@@ -111,80 +110,92 @@ const userEmail = document.getElementById("userEmail");
 const logoutBtn = document.getElementById("logoutBtn");
 const profileBtn = document.getElementById("profileBtn");
 
-let uid, userData;
+let userData = null;
+let uid = null;
 
 auth.onAuthStateChanged(async user => {
-  if(!user) return window.location.href="login.html";
+  if(!user) return window.location.href="https://naptile.github.io/refferal-napcash/login.html";
   uid = user.uid;
 
-  const userDocRef = db.collection("users").doc(uid);
-
-  // Listen to own document
-  userDocRef.onSnapshot(doc => {
+  // Real-time listener for user's own document to auto-hide Activate button
+  db.collection("users").doc(uid).onSnapshot(async doc => {
     if(!doc.exists) return;
     userData = doc.data();
 
-    userEmail.textContent = userData.fullName || userData.email;
+    // Update status text
     statusText.textContent = userData.status || "pending";
-    activateBtn.style.display = userData.status === "active" ? "none" : "inline-block";
 
-    refCodeSpan.textContent = userData.referralCode;
-    refLinkInput.value = `register.html?ref=${userData.referralCode}`;
+    // Hide activate button if active
+    if(userData.status === "active") activateBtn.style.display = "none";
+    else activateBtn.style.display = "inline-block";
 
-    // Display referral list
-    referralsList.innerHTML = "";
-    (userData.referrals || []).forEach(r => {
-      const li = document.createElement("li");
-      li.innerHTML = `<span>${r.name}</span>
-                      <span class="status-badge ${r.status==="active"?"active":"inactive"}">${r.status.toUpperCase()}</span>`;
-      referralsList.appendChild(li);
-    });
-
-    // Earnings
-    lifetimeEarningsSpan.textContent = userData.lifetimeEarnings || 0;
-    earningsSpan.textContent = userData.earnings || 0;
-    withdrawBtn.disabled = !(userData.earnings > 0);
+    // Update email/name
+    userEmail.textContent = userData.fullName || userData.email;
   });
 
-  // Copy referral link
-  copyBtn.onclick = () => navigator.clipboard.writeText(refLinkInput.value).then(()=>alert("Referral link copied!"));
+  // Referral code + link
+  const userDoc = await db.collection("users").doc(uid).get();
+  userData = userDoc.data();
+  refCodeSpan.textContent = userData.referralCode;
+  const referralLink = `https://naptile.github.io/refferal-napcash/register.html?ref=${userData.referralCode}`;
+  refLinkInput.value = referralLink;
+  copyBtn.onclick = ()=>navigator.clipboard.writeText(referralLink).then(()=>alert("Referral link copied!"));
 
-  // Activate via WhatsApp
-  activateBtn.onclick = () => {
+  // Activate button opens WhatsApp
+  activateBtn.onclick = ()=>{
     const msg = `Hi Admin, I want to activate my account. My name is ${userData.fullName}`;
-    window.open(`https://wa.me/254718439373?text=${encodeURIComponent(msg)}`, "_blank");
+    const url = `https://wa.me/254718439373?text=${encodeURIComponent(msg)}`;
+    window.open(url,"_blank");
   };
 
-  // Profile info
+  // Profile button
   profileBtn.onclick = () => {
-    alert(`Profile Info:\nFull Name: ${userData.fullName}\nEmail: ${userData.email}\nStatus: ${userData.status}\nReferral Code: ${userData.referralCode}`);
+    alert(`Profile Info:\n\nFull Name: ${userData.fullName}\nEmail: ${userData.email}\nStatus: ${userData.status}\nReferral Code: ${userData.referralCode}`);
   };
 
-  // Withdraw button
-  withdrawBtn.onclick = async () => {
-    if(userData.status !== "active") { alert("Activate account first."); return; }
-    const amount = userData.earnings || 0;
-    if(amount <= 0) { alert("No earnings to withdraw!"); return; }
+  // Real-time listener for referrals
+  db.collection("users").where("referredBy","==",userData.referralCode)
+    .onSnapshot(snapshot => {
+      const referralsList = document.getElementById("referralsList");
+      referralsList.innerHTML="";
+      let activeCount = 0;
+      let seen = new Set();
 
-    await db.collection("withdrawals").add({
-      userId: uid,
-      amount,
-      status: "pending",
-      method: userData.paymentMethod || "Mpesa",
-      createdAt: firebase.firestore.FieldValue.serverTimestamp()
-    });
+      snapshot.forEach(doc=>{
+        const d = doc.data();
+        if(seen.has(doc.id)) return;
+        seen.add(doc.id);
 
-    await userDocRef.update({
-      totalWithdrawn: (userData.totalWithdrawn || 0) + amount,
-      earnings: 0
+        if(d.status==="active") activeCount++;
+        const li = document.createElement("li");
+        li.innerHTML = `<span>${d.fullName || d.email}</span>
+                        <span class="status-badge ${d.status==="active"?"active":"inactive"}">
+                          ${d.status.toUpperCase()}
+                        </span>`;
+        referralsList.appendChild(li);
+      });
+
+      // Earnings calculations
+      const lifetime = activeCount * 50;
+      const totalWithdrawn = userData.totalWithdrawn || 0;
+      const balance = lifetime - totalWithdrawn;
+
+      lifetimeEarningsSpan.textContent = lifetime;
+      earningsSpan.textContent = balance;
+      withdrawBtn.disabled = balance <= 0;
+
+      // Update Firestore
+      db.collection("users").doc(uid).update({
+        lifetimeEarnings: lifetime,
+        earnings: balance
+      });
     });
-  };
 
   // Withdrawals history
-  db.collection("withdrawals").where("userId","==",uid).orderBy("createdAt","desc").onSnapshot(snap => {
-    withdrawalsList.innerHTML = "";
-    if(snap.empty) { withdrawalsList.innerHTML="<li>No withdrawals yet</li>"; return; }
-    snap.forEach(doc => {
+  db.collection("withdrawals").where("userId","==",uid).orderBy("createdAt","desc").onSnapshot(snap=>{
+    withdrawalsList.innerHTML="";
+    if(snap.empty){ withdrawalsList.innerHTML="<li>No withdrawals yet</li>"; return; }
+    snap.forEach(doc=>{
       const d = doc.data();
       const createdAt = d.createdAt?.toDate ? d.createdAt.toDate().toLocaleString() : "N/A";
       const li = document.createElement("li");
@@ -196,12 +207,38 @@ auth.onAuthStateChanged(async user => {
       withdrawalsList.appendChild(li);
     });
   });
+
+  // Withdraw button
+  withdrawBtn.onclick = async ()=>{
+    if(userData.status!=="active"){ alert("Activate account first."); return; }
+
+    const withdrawAmount = parseInt(earningsSpan.textContent);
+    if(withdrawAmount <= 0){ alert("No earnings to withdraw!"); return; }
+
+    await db.collection("withdrawals").add({
+      userId: uid,
+      amount: withdrawAmount,
+      status: "pending",
+      method: userData.paymentMethod || "Mpesa",
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+
+    await db.collection("users").doc(uid).update({
+      totalWithdrawn: (userData.totalWithdrawn || 0) + withdrawAmount,
+      earnings: 0
+    });
+
+    earningsSpan.textContent = 0;
+    withdrawBtn.disabled = true;
+    alert("Withdrawal request sent!");
+  };
+
 });
 
 // Logout
-logoutBtn.onclick = async () => {
+logoutBtn.onclick = async ()=>{
   await auth.signOut();
-  window.location.href="login.html";
+  window.location.href="https://naptile.github.io/refferal-napcash/login.html";
 };
 </script>
 </body>
