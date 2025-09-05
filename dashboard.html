@@ -55,8 +55,7 @@ input#refLink { width:100%; padding:5px; border:none; border-radius:5px; color:#
       <div class="info-card">
         <h3>Your Balance</h3>
         <p>KSh <span id="earnings">0</span></p>
-        <button id="withdrawBtn" class="btn-orange" style="margin-top:10px;">Withdraw</button>
-        <p id="withdrawStatus" style="margin-top:8px; font-size:0.9rem; color:orange;"></p>
+        <button id="withdrawBtn" class="btn-orange" style="margin-top:10px;" disabled>Withdraw</button>
       </div>
       <div class="info-card">
         <h3>Lifetime Earnings</h3>
@@ -117,27 +116,37 @@ let uid = null;
 auth.onAuthStateChanged(async user => {
   if(!user) return window.location.href="https://naptile.github.io/refferal-napcash/login.html";
   uid = user.uid;
+
+  // Real-time listener for user's own document to auto-hide Activate button
+  db.collection("users").doc(uid).onSnapshot(async doc => {
+    if(!doc.exists) return;
+    userData = doc.data();
+
+    // Update status text
+    statusText.textContent = userData.status || "pending";
+
+    // Hide activate button if active
+    if(userData.status === "active") activateBtn.style.display = "none";
+    else activateBtn.style.display = "inline-block";
+
+    // Update email/name
+    userEmail.textContent = userData.fullName || userData.email;
+  });
+
+  // Referral code + link
   const userDoc = await db.collection("users").doc(uid).get();
-  if(!userDoc.exists) return;
   userData = userDoc.data();
+  refCodeSpan.textContent = userData.referralCode;
+  const referralLink = `https://naptile.github.io/refferal-napcash/register.html?ref=${userData.referralCode}`;
+  refLinkInput.value = referralLink;
+  copyBtn.onclick = ()=>navigator.clipboard.writeText(referralLink).then(()=>alert("Referral link copied!"));
 
-  // Show user name/email
-  userEmail.textContent = userData.fullName || userData.email;
-
-  // Status + activate button
-  statusText.textContent = userData.status || "pending";
-  if(userData.status==="active") activateBtn.style.display="none";
+  // Activate button opens WhatsApp
   activateBtn.onclick = ()=>{
     const msg = `Hi Admin, I want to activate my account. My name is ${userData.fullName}`;
     const url = `https://wa.me/254718439373?text=${encodeURIComponent(msg)}`;
     window.open(url,"_blank");
   };
-
-  // Referral code + link
-  refCodeSpan.textContent = userData.referralCode;
-  const referralLink = `https://naptile.github.io/refferal-napcash/register.html?ref=${userData.referralCode}`;
-  refLinkInput.value = referralLink;
-  copyBtn.onclick = ()=>navigator.clipboard.writeText(referralLink).then(()=>alert("Referral link copied!"));
 
   // Profile button
   profileBtn.onclick = () => {
@@ -146,7 +155,7 @@ auth.onAuthStateChanged(async user => {
 
   // Real-time listener for referrals
   db.collection("users").where("referredBy","==",userData.referralCode)
-    .onSnapshot(async snapshot => {
+    .onSnapshot(snapshot => {
       const referralsList = document.getElementById("referralsList");
       referralsList.innerHTML="";
       let activeCount = 0;
@@ -166,19 +175,19 @@ auth.onAuthStateChanged(async user => {
         referralsList.appendChild(li);
       });
 
-      // Lifetime earnings = all active referrals × 50
+      // Earnings calculations
       const lifetime = activeCount * 50;
-      lifetimeEarningsSpan.textContent = lifetime;
-
-      // Balance = lifetime - total withdrawn
       const totalWithdrawn = userData.totalWithdrawn || 0;
-      const currentBalance = lifetime - totalWithdrawn;
-      earningsSpan.textContent = currentBalance;
+      const balance = lifetime - totalWithdrawn;
+
+      lifetimeEarningsSpan.textContent = lifetime;
+      earningsSpan.textContent = balance;
+      withdrawBtn.disabled = balance <= 0;
 
       // Update Firestore
-      await db.collection("users").doc(uid).update({
+      db.collection("users").doc(uid).update({
         lifetimeEarnings: lifetime,
-        earnings: currentBalance
+        earnings: balance
       });
     });
 
@@ -199,7 +208,7 @@ auth.onAuthStateChanged(async user => {
     });
   });
 
-  // Withdraw
+  // Withdraw button
   withdrawBtn.onclick = async ()=>{
     if(userData.status!=="active"){ alert("Activate account first."); return; }
 
@@ -220,6 +229,7 @@ auth.onAuthStateChanged(async user => {
     });
 
     earningsSpan.textContent = 0;
+    withdrawBtn.disabled = true;
     alert("Withdrawal request sent!");
   };
 
