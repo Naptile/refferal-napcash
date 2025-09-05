@@ -115,21 +115,19 @@
       if (!user) return window.location.href="https://naptile.github.io/refferal-napcash/login.html";
       uid = user.uid;
 
-      // --- START: UID-first, Email-fallback lookup ---
+      // UID-first, email-fallback lookup
       let userDoc = await db.collection("users").doc(uid).get();
-
       if (!userDoc.exists) {
         const snap = await db.collection("users").where("email", "==", user.email).limit(1).get();
         if (!snap.empty) {
           userDoc = snap.docs[0];
-          uid = userDoc.id; // update UID to match found document
+          uid = userDoc.id;
         } else {
           alert("Account not found in database. Contact support.");
           await auth.signOut();
           return window.location.href="https://naptile.github.io/refferal-napcash/login.html";
         }
       }
-      // --- END: UID-first, Email-fallback lookup ---
 
       userData = userDoc.data();
       userEmail.textContent = userData.fullName || userData.email;
@@ -151,25 +149,43 @@
         alert(`Profile Info:\n\nFull Name: ${userData.fullName}\nEmail: ${userData.email}\nStatus: ${userData.status}\nReferral Code: ${userData.referralCode}`);
       };
 
-      db.collection("users").where("referredBy","==",userData.referralCode)
-      .onSnapshot(snapshot => {
-        const referralsList = document.getElementById("referralsList");
-        referralsList.innerHTML="";
-        let activeCount = 0;
-        let seen = new Set();
-        snapshot.forEach(doc=>{
-          const d = doc.data();
-          if(seen.has(doc.id)) return;
-          seen.add(doc.id);
-          if(d.status==="active") activeCount++;
-          const li = document.createElement("li");
-          li.innerHTML = `<span>${d.fullName || d.email}</span><span class="status-badge ${d.status==="active"?"active":"inactive"}">${d.status.toUpperCase()}</span>`;
-          referralsList.appendChild(li);
+      // People You Referred (strictly those who used your referral code)
+      db.collection("users")
+        .where("referredBy", "==", userData.referralCode)
+        .onSnapshot(snapshot => {
+          const referralsList = document.getElementById("referralsList");
+          referralsList.innerHTML = "";
+
+          if (snapshot.empty) {
+            referralsList.innerHTML = "<li>No one has used your referral link yet</li>";
+            lifetimeEarningsSpan.textContent = 0;
+            earningsSpan.textContent = 0;
+            return;
+          }
+
+          let activeCount = 0;
+          let seen = new Set();
+
+          snapshot.forEach(doc => {
+            const d = doc.data();
+            if (seen.has(doc.id)) return;
+            seen.add(doc.id);
+
+            if (d.status === "active") activeCount++;
+
+            const li = document.createElement("li");
+            li.innerHTML = `
+              <span>${d.fullName || d.email}</span>
+              <span class="status-badge ${d.status === "active" ? "active" : "inactive"}">
+                ${d.status.toUpperCase()}
+              </span>`;
+            referralsList.appendChild(li);
+          });
+
+          lifetimeEarningsSpan.textContent = activeCount * 50;
+          const newEarnings = (activeCount - (userData.lastWithdrawCount || 0)) * 50;
+          earningsSpan.textContent = newEarnings > 0 ? newEarnings : 0;
         });
-        lifetimeEarningsSpan.textContent = activeCount * 50;
-        const newEarnings = (activeCount - (userData.lastWithdrawCount || 0)) * 50;
-        earningsSpan.textContent = newEarnings > 0 ? newEarnings : 0;
-      });
 
       db.collection("withdrawals").where("userId","==",uid).orderBy("createdAt","desc").onSnapshot(snap=>{
         withdrawalsList.innerHTML="";
