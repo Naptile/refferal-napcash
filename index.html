@@ -5,49 +5,58 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Welcome | NapCash</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
 </head>
-<body class="bg-white text-black">
+<body class="bg-white text-black font-sans">
 
   <!-- Navbar -->
-  <header class="bg-black text-white p-4 flex justify-between items-center">
+  <header class="bg-black text-white p-4 flex justify-between items-center sticky top-0 z-50 shadow">
     <h1 class="text-xl font-bold text-orange-500">NapCash</h1>
-    <nav>
-      <a href="#features" class="px-3 hover:text-orange-400">Features</a>
-      <a href="#how" class="px-3 hover:text-orange-400">How it Works</a>
-      <a href="register.html" class="px-3 bg-orange-500 text-white py-1 px-3 rounded-lg hover:bg-orange-600">Register</a>
+    <nav class="space-x-4">
+      <a href="#features" class="hover:text-orange-400">Features</a>
+      <a href="#how" class="hover:text-orange-400">How it Works</a>
+      <a href="register.html" class="bg-orange-500 text-white py-1 px-3 rounded-lg hover:bg-orange-600 transition">Register</a>
     </nav>
   </header>
 
   <!-- Hero Section -->
-  <section class="text-center py-16 px-6 bg-orange-50">
-    <h2 class="text-3xl md:text-4xl font-bold text-black">
-      Earn Money by Referring Friends 🚀
-    </h2>
-    <p class="mt-4 text-lg text-gray-700">
-      Join <span class="font-bold text-orange-600">NapCash</span> today with a one-time registration of 
-      <span class="font-bold text-orange-600">Ksh 100</span>. <br>
-      Get your unique referral code, invite friends, and earn 
-      <span class="font-bold text-orange-600">Ksh 50</span> for every paid referral.
-    </p>
-    <a href="register.html" 
-       class="mt-6 inline-block bg-orange-500 text-white font-semibold py-3 px-6 rounded-xl shadow-md hover:bg-orange-600 transition">
-      Get Started
-    </a>
+  <section class="relative text-center py-20 px-6 bg-gradient-to-r from-orange-50 via-white to-orange-50 overflow-hidden">
+    <!-- Futuristic background pattern -->
+    <div class="absolute inset-0 bg-[radial-gradient(circle_at_top,_#ffedd5,_transparent_70%)]"></div>
+
+    <div class="relative z-10">
+      <h2 class="text-3xl md:text-5xl font-extrabold text-black">
+        Earn Money by Referring Friends 🚀
+      </h2>
+      <p class="mt-4 text-lg text-gray-700">
+        Join <span class="font-bold text-orange-600">NapCash</span> today with a one-time registration of 
+        <span class="font-bold text-orange-600">Ksh 100</span>. <br>
+        Get your unique referral code, invite friends, and earn 
+        <span class="font-bold text-orange-600">Ksh 50</span> for every paid referral.
+      </p>
+      <a href="register.html" 
+         class="mt-6 inline-block bg-orange-500 text-white font-semibold py-3 px-6 rounded-xl shadow-md hover:bg-orange-600 transition animate-pulse">
+        Get Started
+      </a>
+    </div>
   </section>
 
   <!-- Features -->
-  <section id="features" class="py-12 px-6 bg-white">
-    <h3 class="text-2xl font-bold text-center text-black">Why Join NapCash?</h3>
-    <div class="grid md:grid-cols-3 gap-8 mt-8">
-      <div class="p-6 bg-orange-100 rounded-2xl shadow hover:shadow-lg">
+  <section id="features" class="py-16 px-6 bg-white">
+    <h3 class="text-3xl font-bold text-center text-black">Why Join NapCash?</h3>
+    <div class="grid md:grid-cols-3 gap-8 mt-10 max-w-6xl mx-auto">
+      <div class="p-6 bg-orange-100 rounded-2xl shadow hover:shadow-lg transition">
+        <i data-lucide="wallet" class="w-10 h-10 text-orange-600 mb-3"></i>
         <h4 class="font-bold text-lg text-orange-600">One-time Fee</h4>
         <p class="mt-2 text-gray-700">Pay only Ksh 100 to join, no hidden costs.</p>
       </div>
-      <div class="p-6 bg-orange-100 rounded-2xl shadow hover:shadow-lg">
+      <div class="p-6 bg-orange-100 rounded-2xl shadow hover:shadow-lg transition">
+        <i data-lucide="coins" class="w-10 h-10 text-orange-600 mb-3"></i>
         <h4 class="font-bold text-lg text-orange-600">Earn Passively</h4>
         <p class="mt-2 text-gray-700">Each referral you bring earns you Ksh 50.</p>
       </div>
-      <div class="p-6 bg-orange-100 rounded-2xl shadow hover:shadow-lg">
+      <div class="p-6 bg-orange-100 rounded-2xl shadow hover:shadow-lg transition">
+        <i data-lucide="bar-chart-2" class="w-10 h-10 text-orange-600 mb-3"></i>
         <h4 class="font-bold text-lg text-orange-600">Simple & Transparent</h4>
         <p class="mt-2 text-gray-700">Track your referrals and earnings easily in your dashboard.</p>
       </div>
@@ -55,9 +64,9 @@
   </section>
 
   <!-- How it Works -->
-  <section id="how" class="py-12 px-6 bg-orange-50">
-    <h3 class="text-2xl font-bold text-center text-black">How NapCash Works</h3>
-    <div class="max-w-2xl mx-auto mt-8 space-y-6">
+  <section id="how" class="py-16 px-6 bg-orange-50">
+    <h3 class="text-3xl font-bold text-center text-black">How NapCash Works</h3>
+    <div class="max-w-2xl mx-auto mt-10 space-y-6">
       <div class="flex items-start gap-4">
         <div class="bg-orange-500 text-white w-10 h-10 flex items-center justify-center rounded-full font-bold">1</div>
         <p class="text-gray-800">Register with just Ksh 100 and get your referral code.</p>
@@ -71,7 +80,7 @@
         <p class="text-gray-800">Earn Ksh 50 for every referral that pays and activates their account.</p>
       </div>
     </div>
-    <div class="text-center mt-8">
+    <div class="text-center mt-10">
       <a href="register.html" class="bg-black text-white font-semibold py-3 px-6 rounded-xl hover:bg-gray-800 transition">
         Join Now
       </a>
@@ -79,9 +88,16 @@
   </section>
 
   <!-- Footer -->
-  <footer class="bg-black text-white text-center py-6 mt-12">
+  <footer class="bg-black text-white text-center py-8 mt-12">
     <p>&copy; 2025 NapCash. All rights reserved.</p>
+    <div class="mt-2 space-x-4">
+      <a href="mailto:support@napcash.com" class="text-orange-400 hover:underline">support@napcash.com</a>
+      <a href="#" class="text-orange-400 hover:underline">Privacy Policy</a>
+    </div>
   </footer>
 
+  <script>
+    lucide.createIcons();
+  </script>
 </body>
 </html>
