@@ -1,22 +1,18 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>NapCash | Register</title>
-  <link rel="stylesheet" href="register.css">
-
+  <link rel="stylesheet" href="register.css" />
   <style>
-    .register-container {
-      padding: 20px;
-      max-width: 400px;
-      margin: auto;
-    }
+    .register-container { padding: 20px; max-width: 400px; margin: auto; }
     .navbar ul.active { display: block; }
     .navbar ul { z-index: 999; }
   </style>
 </head>
 <body>
+  <!-- Navbar -->
   <nav class="navbar">
     <div class="logo">NapCash</div>
     <ul>
@@ -29,10 +25,9 @@
     <div class="menu-toggle"><span></span><span></span><span></span></div>
   </nav>
 
+  <!-- Registration Form -->
   <div class="register-container">
-    <div class="logo-container">
-      <img src="logo.png" alt="NapCash Logo">
-    </div>
+    <div class="logo-container"><img src="logo.png" alt="NapCash Logo"></div>
     <h1>Create Account</h1>
 
     <form id="registrationForm">
@@ -69,7 +64,7 @@
   <script src="https://js.paystack.co/v1/inline.js"></script>
 
   <script>
-    // Firebase config
+    // ===== Firebase Config =====
     const firebaseConfig = {
       apiKey: "AIzaSyDybgITS1zttYLSa1_vsV0vYLzqbr42abA",
       authDomain: "napcash-3e696.firebaseapp.com",
@@ -81,28 +76,28 @@
     };
     firebase.initializeApp(firebaseConfig);
 
-    const PAYSTACK_PUBLIC_KEY = "pk_test_d03b79de883fb1a0d254a0046ae6e1c2d9b28b36";
     const form = document.getElementById("registrationForm");
     const registerBtn = document.getElementById("registerBtn");
+    const PAYSTACK_PUBLIC_KEY = "pk_test_d03b79de883fb1a0d254a0046ae6e1c2d9b28b36";
+
+    // Utility: Generate unique referral code
+    async function generateReferralCode() {
+      let code, exists;
+      do {
+        code = "NC" + Math.random().toString(36).substring(2, 8).toUpperCase();
+        const snap = await firebase.firestore().collection("users").where("referralCode", "==", code).get();
+        exists = !snap.empty;
+      } while (exists);
+      return code;
+    }
 
     // Validate phone
-    function isValidPhone(phone) {
-      return /^(\+254|254|0)?7\d{8}$/.test(phone);
-    }
-
+    function isValidPhone(phone) { return /^(\+254|254|0)?7\d{8}$/.test(phone); }
     // Validate password
-    function isStrongPassword(pw) {
-      return pw.length >= 6 && /\d/.test(pw);
-    }
+    function isStrongPassword(pw) { return pw.length >= 6 && /\d/.test(pw); }
 
-    // Auto-fill referral
-    const urlParams = new URLSearchParams(window.location.search);
-    const refCode = urlParams.get("ref");
-    if (refCode) document.getElementById("referralCode").value = refCode;
-
-    form.addEventListener("submit", async function (e) {
+    form.addEventListener("submit", async function(e) {
       e.preventDefault();
-
       const fullName = document.getElementById("username").value.trim();
       const email = document.getElementById("email").value.trim();
       const phone = document.getElementById("phone").value.trim();
@@ -110,42 +105,24 @@
       const confirmPassword = document.getElementById("confirm-password").value;
       const usedCode = document.getElementById("referralCode").value.trim() || null;
 
-      console.log("Register clicked:", email);
+      // Basic validations
+      if (!isValidPhone(phone)) return alert("Enter valid Kenyan phone number.");
+      if (!isStrongPassword(password)) return alert("Password must be 6+ chars & include a number.");
+      if (password !== confirmPassword) return alert("Passwords do not match.");
 
-      // Validations
-      if (!isValidPhone(phone)) { alert("Enter valid Kenyan phone."); return; }
-      if (!isStrongPassword(password)) { alert("Password min 6 chars + number."); return; }
-      if (password !== confirmPassword) { alert("Passwords do not match."); return; }
+      // Check existing account
+      try {
+        const methods = await firebase.auth().fetchSignInMethodsForEmail(email);
+        if (methods.length > 0) return window.location.href = "login.html";
+      } catch (err) {
+        return alert("Error checking existing account. Try again.");
+      }
 
       registerBtn.disabled = true;
       registerBtn.innerText = "Processing...";
 
-      // Check if email exists
-      try {
-        const methods = await firebase.auth().fetchSignInMethodsForEmail(email);
-        if (methods.length > 0) {
-          alert("Email already exists. Redirecting to login.");
-          window.location.href = "login.html";
-          return;
-        }
-      } catch (err) {
-        console.error("Email check failed:", err);
-        alert("Error checking email. Try again.");
-        registerBtn.disabled = false;
-        registerBtn.innerText = "Register & Pay 100 Ksh";
-        return;
-      }
-
-      // Start Paystack payment
       const amountKES = 100;
       const txRef = "NCASH_" + Date.now();
-
-      if (typeof PaystackPop === "undefined") {
-        alert("Payment script failed to load.");
-        registerBtn.disabled = false;
-        registerBtn.innerText = "Register & Pay 100 Ksh";
-        return;
-      }
 
       const handler = PaystackPop.setup({
         key: PAYSTACK_PUBLIC_KEY,
@@ -153,69 +130,61 @@
         amount: amountKES * 100,
         currency: "KES",
         ref: txRef,
-        callback: async function(response) {
-          try {
-            console.log("Payment success:", response.reference);
+        callback: function(response) {
+          (async function() {
+            try {
+              // Create user
+              const cred = await firebase.auth().createUserWithEmailAndPassword(email, password);
+              const uid = cred.user.uid;
 
-            // Create Firebase user
-            const cred = await firebase.auth().createUserWithEmailAndPassword(email, password);
-            const uid = cred.user.uid;
+              const myCode = await generateReferralCode();
+              const myLink = `${window.location.origin}/register.html?ref=${myCode}`;
 
-            // Generate unique referral code
-            let myCode, exists = true;
-            while (exists) {
-              myCode = "NC" + Math.random().toString(36).substring(2, 8).toUpperCase();
-              const snap = await firebase.firestore().collection("users")
-                .where("referralCode", "==", myCode).get();
-              exists = !snap.empty;
-            }
-            const myLink = `${window.location.origin}/register.html?ref=${myCode}`;
+              // Save in Firestore
+              await firebase.firestore().collection("users").doc(uid).set({
+                fullName,
+                email,
+                phone,
+                referralCode: myCode,
+                referralLink: myLink,
+                referredBy: usedCode,
+                wallet: 0,
+                status: "active",
+                totalReferrals: 0,
+                earnings: 0,
+                createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                paymentRef: response.reference
+              });
 
-            // Save user to Firestore
-            await firebase.firestore().collection("users").doc(uid).set({
-              fullName,
-              email,
-              phone,
-              referralCode: myCode,
-              referralLink: myLink,
-              referredBy: usedCode,
-              wallet: 0,
-              status: "active",
-              totalReferrals: 0,
-              earnings: 0,
-              createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-              updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-              paymentRef: response.reference
-            });
-
-            // Add referral bonus
-            if (usedCode) {
-              const refSnap = await firebase.firestore()
-                .collection("users").where("referralCode", "==", usedCode).limit(1).get();
-              if (!refSnap.empty) {
-                const refUser = refSnap.docs[0];
-                const refId = refUser.id;
-                if (refId !== uid) {
-                  await firebase.firestore().collection("users").doc(refId).update({
-                    wallet: firebase.firestore.FieldValue.increment(50),
-                    totalReferrals: firebase.firestore.FieldValue.increment(1),
-                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-                  });
+              // Handle referral bonus
+              if (usedCode) {
+                const refSnap = await firebase.firestore().collection("users").where("referralCode", "==", usedCode).limit(1).get();
+                if (!refSnap.empty) {
+                  const refUser = refSnap.docs[0];
+                  const refUserId = refUser.id;
+                  if (refUserId !== uid) {
+                    await firebase.firestore().collection("users").doc(refUserId).update({
+                      wallet: firebase.firestore.FieldValue.increment(50),
+                      totalReferrals: firebase.firestore.FieldValue.increment(1),
+                      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+                  }
                 }
               }
+
+              localStorage.setItem("referralCode", myCode);
+              localStorage.setItem("referralLink", myLink);
+
+              // Redirect to dashboard
+              window.location.href = "dashboard.html";
+            } catch (err) {
+              console.error("[NapCash] Error:", err);
+              alert("Payment succeeded but account creation failed. Contact support.");
+              registerBtn.disabled = false;
+              registerBtn.innerText = "Register & Pay 100 Ksh";
             }
-
-            // Store locally and redirect
-            localStorage.setItem("referralCode", myCode);
-            localStorage.setItem("referralLink", myLink);
-            window.location.href = "dashboard.html";
-
-          } catch (err) {
-            console.error("Firebase ERROR:", err);
-            alert("Payment succeeded but account creation failed. Contact support.");
-            registerBtn.disabled = false;
-            registerBtn.innerText = "Register & Pay 100 Ksh";
-          }
+          })();
         },
         onClose: function() {
           alert("Payment closed. Registration not completed.");
@@ -229,3 +198,4 @@
   </script>
 </body>
 </html>
+
