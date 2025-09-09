@@ -1,35 +1,49 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>NapCash – Login</title>
-  <link rel="stylesheet" href="styles/login.css">
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-  <style>
-    body { margin:0; font-family:Arial, sans-serif; background:#000; color:#fff; display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:100vh; }
-    .card { background:#111; padding:30px; border-radius:12px; max-width:400px; width:90%; }
-    input { width:100%; padding:10px; margin:10px 0; border:none; border-radius:6px; }
-    button { width:100%; padding:10px; border:none; border-radius:6px; background:orange; color:black; font-weight:bold; cursor:pointer; transition:0.3s; }
-    button:hover { background:#ff9900; color:#fff; }
-    .msg { margin-top:10px; color:orange; }
-    a { color:orange; text-decoration:none; }
-  </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>NapCash | Login</title>
+  <link rel="stylesheet" href="register.css" />
 </head>
 <body>
-  <div class="card">
-    <h2>Login to NapCash</h2>
+  <div class="register-container">
+    <!-- Logo -->
+    <div class="logo-container">
+      <img src="logo.png" alt="NapCash Logo" class="logo" />
+    </div>
+
+    <h1>Login to NapCash</h1>
     <form id="loginForm">
-      <input type="email" id="email" placeholder="Email Address" required>
-      <input type="password" id="password" placeholder="Password" required>
-      <button type="submit">Login</button>
+      <div class="form-group">
+        <label for="email">Email</label>
+        <input type="email" id="email" required />
+      </div>
+
+      <div class="form-group">
+        <label for="password">Password</label>
+        <input type="password" id="password" required />
+      </div>
+
+      <button type="submit" id="loginBtn">Login</button>
     </form>
-    <p style="margin-top:10px;">Don’t have an account? <a href="index.html">Register</a></p>
-    <p id="msg" class="msg"></p>
+
+    <!-- Forgot Password + Register -->
+    <p style="margin-top:15px; font-size:0.9rem; color:#ccc;">
+      <a href="forgot-password.html" style="color:#ff6600; text-decoration:none; font-weight:bold;">Forgot Password?</a>
+    </p>
+    <p style="margin-top:5px; font-size:0.9rem; color:#ccc;">
+      Don’t have an account? 
+      <a href="register.html" style="color:#ff6600; text-decoration:none; font-weight:bold;">Register here</a>
+    </p>
   </div>
 
+  <!-- ===== Firebase SDKs (Compat for v8 style) ===== -->
+  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
+
+  <!-- ===== Firebase Config ===== -->
   <script>
     const firebaseConfig = {
       apiKey: "AIzaSyDybgITS1zttYLSa1_vsV0vYLzqbr42abA",
@@ -37,48 +51,38 @@
       projectId: "napcash-3e696",
       storageBucket: "napcash-3e696.firebasestorage.app",
       messagingSenderId: "720221815295",
-      appId: "1:720221815295:web:e8b299b30909c6cc9927ca"
+      appId: "1:720221815295:web:e8b299b30909c6cc9927ca",
+      measurementId: "G-QE6CJP9KJR"
     };
     firebase.initializeApp(firebaseConfig);
-    const auth = firebase.auth();
-    const db = firebase.firestore();
+  </script>
+
+  <!-- ===== Login Script ===== -->
+  <script>
+    // Prefill email if redirected from registration
+    document.addEventListener("DOMContentLoaded", () => {
+      const urlParams = new URLSearchParams(window.location.search);
+      const prefillEmail = urlParams.get("email");
+      if (prefillEmail) {
+        document.getElementById("email").value = prefillEmail;
+      }
+    });
 
     const loginForm = document.getElementById("loginForm");
-    const msg = document.getElementById("msg");
 
     loginForm.addEventListener("submit", async (e) => {
       e.preventDefault();
+
       const email = document.getElementById("email").value.trim();
-      const password = document.getElementById("password").value.trim();
-      msg.textContent = "Checking account...";
+      const password = document.getElementById("password").value;
 
       try {
-        // Step 1: Firebase Auth
-        const userCred = await auth.signInWithEmailAndPassword(email, password);
-        let uid = userCred.user.uid;
-
-        // Step 2: Try fetching user document by UID
-        let userDoc = await db.collection("users").doc(uid).get();
-
-        // Step 3: Fallback: search by email if UID doc doesn't exist
-        if (!userDoc.exists) {
-          const snap = await db.collection("users").where("email","==",email).limit(1).get();
-          if (!snap.empty) {
-            userDoc = snap.docs[0];
-            uid = userDoc.id; // update UID
-          } else {
-            msg.textContent = "Account not registered in database. Contact support.";
-            await auth.signOut();
-            return;
-          }
-        }
-
-        // Login successful
-        msg.textContent = "Login successful! Redirecting...";
-        setTimeout(() => window.location.href = "dashboard.html", 1500);
-
+        await firebase.auth().signInWithEmailAndPassword(email, password);
+        alert("✅ Login successful!");
+        window.location.href = "dashboard.html";
       } catch (err) {
-        msg.textContent = err.message;
+        console.error("[NapCash] Login ERROR ❌", err);
+        alert("Error: " + err.message);
       }
     });
   </script>
