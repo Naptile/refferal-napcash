@@ -6,13 +6,16 @@
   <title>NapCash | Register</title>
   <link rel="stylesheet" href="register.css" />
   <style>
-    .register-container { padding: 20px; max-width: 400px; margin: auto; }
+    .register-container {
+      padding: 20px;
+      max-width: 400px;
+      margin: auto;
+    }
     .navbar ul.active { display: block; }
     .navbar ul { z-index: 999; }
   </style>
 </head>
 <body>
-  <!-- Navbar -->
   <nav class="navbar">
     <div class="logo">NapCash</div>
     <ul>
@@ -22,32 +25,37 @@
       <li><a href="login.html">Login</a></li>
       <li><a href="register.html" class="active">Register</a></li>
     </ul>
-    <div class="menu-toggle"><span></span><span></span><span></span></div>
+    <div class="menu-toggle">
+      <span></span>
+      <span></span>
+      <span></span>
+    </div>
   </nav>
 
-  <!-- Registration Form -->
   <div class="register-container">
-    <div class="logo-container"><img src="logo.png" alt="NapCash Logo"></div>
+    <div class="logo-container">
+      <img src="logo.png" alt="NapCash Logo">
+    </div>
     <h1>Create Account</h1>
 
     <form id="registrationForm">
       <label for="username">Full Name</label>
-      <input type="text" id="username" placeholder="Enter full name" required>
+      <input type="text" id="username" required>
 
       <label for="email">Email</label>
-      <input type="email" id="email" placeholder="Enter email" required>
+      <input type="email" id="email" required>
 
       <label for="phone">Phone</label>
-      <input type="tel" id="phone" placeholder="Enter phone number" required>
+      <input type="tel" id="phone" required>
 
       <label for="password">Password</label>
-      <input type="password" id="password" placeholder="Enter password" required>
+      <input type="password" id="password" required>
 
       <label for="confirm-password">Confirm Password</label>
-      <input type="password" id="confirm-password" placeholder="Confirm password" required>
+      <input type="password" id="confirm-password" required>
 
       <label for="referralCode">Referral Code (Optional)</label>
-      <input type="text" id="referralCode" placeholder="Referral Code">
+      <input type="text" id="referralCode">
 
       <button type="submit" id="registerBtn">Register & Pay 100 Ksh</button>
     </form>
@@ -64,7 +72,6 @@
   <script src="https://js.paystack.co/v1/inline.js"></script>
 
   <script>
-    // ===== Firebase Config =====
     const firebaseConfig = {
       apiKey: "AIzaSyDybgITS1zttYLSa1_vsV0vYLzqbr42abA",
       authDomain: "napcash-3e696.firebaseapp.com",
@@ -75,26 +82,28 @@
       measurementId: "G-QE6CJP9KJR"
     };
     firebase.initializeApp(firebaseConfig);
+  </script>
 
+  <script>
+    const PAYSTACK_PUBLIC_KEY = "pk_test_d03b79de883fb1a0d254a0046ae6e1c2d9b28b36";
     const form = document.getElementById("registrationForm");
     const registerBtn = document.getElementById("registerBtn");
-    const PAYSTACK_PUBLIC_KEY = "pk_test_d03b79de883fb1a0d254a0046ae6e1c2d9b28b36";
-
-    // Utility: Generate unique referral code
-    async function generateReferralCode() {
-      let code, exists;
-      do {
-        code = "NC" + Math.random().toString(36).substring(2, 8).toUpperCase();
-        const snap = await firebase.firestore().collection("users").where("referralCode", "==", code).get();
-        exists = !snap.empty;
-      } while (exists);
-      return code;
-    }
 
     // Validate phone
     function isValidPhone(phone) { return /^(\+254|254|0)?7\d{8}$/.test(phone); }
     // Validate password
     function isStrongPassword(pw) { return pw.length >= 6 && /\d/.test(pw); }
+
+    // Generate unique referral code
+    async function generateReferralCode() {
+      let code, exists = true;
+      while (exists) {
+        code = "NC" + Math.random().toString(36).substring(2, 8).toUpperCase();
+        const snap = await firebase.firestore().collection("users").where("referralCode", "==", code).get();
+        exists = !snap.empty;
+      }
+      return code;
+    }
 
     form.addEventListener("submit", async function(e) {
       e.preventDefault();
@@ -105,21 +114,21 @@
       const confirmPassword = document.getElementById("confirm-password").value;
       const usedCode = document.getElementById("referralCode").value.trim() || null;
 
-      // Basic validations
-      if (!isValidPhone(phone)) return alert("Enter valid Kenyan phone number.");
-      if (!isStrongPassword(password)) return alert("Password must be 6+ chars & include a number.");
-      if (password !== confirmPassword) return alert("Passwords do not match.");
-
-      // Check existing account
-      try {
-        const methods = await firebase.auth().fetchSignInMethodsForEmail(email);
-        if (methods.length > 0) return window.location.href = "login.html";
-      } catch (err) {
-        return alert("Error checking existing account. Try again.");
-      }
+      if (!isValidPhone(phone)) { alert("Enter valid Kenyan phone."); return; }
+      if (!isStrongPassword(password)) { alert("Password min 6 chars + number."); return; }
+      if (password !== confirmPassword) { alert("Passwords do not match."); return; }
 
       registerBtn.disabled = true;
       registerBtn.innerText = "Processing...";
+
+      // Check if user already exists
+      const methods = await firebase.auth().fetchSignInMethodsForEmail(email);
+      if (methods.length > 0) { 
+        alert("Email already in use. Please login."); 
+        registerBtn.disabled = false; 
+        registerBtn.innerText = "Register & Pay 100 Ksh"; 
+        return;
+      }
 
       const amountKES = 100;
       const txRef = "NCASH_" + Date.now();
@@ -130,72 +139,67 @@
         amount: amountKES * 100,
         currency: "KES",
         ref: txRef,
-        callback: function(response) {
-          (async function() {
-            try {
-              // Create user
-              const cred = await firebase.auth().createUserWithEmailAndPassword(email, password);
-              const uid = cred.user.uid;
-
-              const myCode = await generateReferralCode();
-              const myLink = `${window.location.origin}/register.html?ref=${myCode}`;
-
-              // Save in Firestore
-              await firebase.firestore().collection("users").doc(uid).set({
-                fullName,
-                email,
-                phone,
-                referralCode: myCode,
-                referralLink: myLink,
-                referredBy: usedCode,
-                wallet: 0,
-                status: "active",
-                totalReferrals: 0,
-                earnings: 0,
-                createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-                updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-                paymentRef: response.reference
-              });
-
-              // Handle referral bonus
-              if (usedCode) {
-                const refSnap = await firebase.firestore().collection("users").where("referralCode", "==", usedCode).limit(1).get();
-                if (!refSnap.empty) {
-                  const refUser = refSnap.docs[0];
-                  const refUserId = refUser.id;
-                  if (refUserId !== uid) {
-                    await firebase.firestore().collection("users").doc(refUserId).update({
-                      wallet: firebase.firestore.FieldValue.increment(50),
-                      totalReferrals: firebase.firestore.FieldValue.increment(1),
-                      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-                    });
-                  }
-                }
-              }
-
-              localStorage.setItem("referralCode", myCode);
-              localStorage.setItem("referralLink", myLink);
-
-              // Redirect to dashboard
-              window.location.href = "dashboard.html";
-            } catch (err) {
-              console.error("[NapCash] Error:", err);
-              alert("Payment succeeded but account creation failed. Contact support.");
-              registerBtn.disabled = false;
-              registerBtn.innerText = "Register & Pay 100 Ksh";
-            }
-          })();
-        },
+        callback: function(response) { handlePaymentSuccess(response); },
         onClose: function() {
           alert("Payment closed. Registration not completed.");
           registerBtn.disabled = false;
           registerBtn.innerText = "Register & Pay 100 Ksh";
         }
       });
-
       handler.openIframe();
+
+      async function handlePaymentSuccess(response) {
+        try {
+          const cred = await firebase.auth().createUserWithEmailAndPassword(email, password);
+          const uid = cred.user.uid;
+
+          const myCode = await generateReferralCode();
+          const myLink = `${window.location.origin}/register.html?ref=${myCode}`;
+
+          await firebase.firestore().collection("users").doc(uid).set({
+            fullName,
+            email,
+            phone,
+            referralCode: myCode,
+            referralLink: myLink,
+            referredBy: usedCode,
+            wallet: 0,
+            status: "active",
+            totalReferrals: 0,
+            earnings: 0,
+            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+            paymentRef: response.reference
+          });
+
+          // Referral bonus
+          if (usedCode) {
+            const refSnap = await firebase.firestore().collection("users")
+              .where("referralCode", "==", usedCode).limit(1).get();
+            if (!refSnap.empty) {
+              const refUser = refSnap.docs[0];
+              if (refUser.id !== uid) {
+                await firebase.firestore().collection("users").doc(refUser.id).update({
+                  wallet: firebase.firestore.FieldValue.increment(50),
+                  totalReferrals: firebase.firestore.FieldValue.increment(1),
+                  updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+              }
+            }
+          }
+
+          localStorage.setItem("referralCode", myCode);
+          localStorage.setItem("referralLink", myLink);
+
+          window.location.href = "dashboard.html";
+        } catch (err) {
+          console.error("[NapCash] Error:", err);
+          alert("Payment succeeded but account creation failed. Contact support.");
+          registerBtn.disabled = false;
+          registerBtn.innerText = "Register & Pay 100 Ksh";
+        }
+      }
     });
   </script>
 </body>
 </html>
-
